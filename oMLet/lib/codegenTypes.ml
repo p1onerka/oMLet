@@ -35,7 +35,7 @@ type rtype_op =
 
 type itype_op =
   | ADDI
-  | LI
+  (* | LI *)
   | JALR
   | SLTI
   | XORI
@@ -46,7 +46,7 @@ type stack_op =
   | LD
   | SD
 
-type stype_op = SW
+(* type stype_op = SW *)
 
 type btype_op =
   | BEQ
@@ -70,7 +70,7 @@ type true_instr =
   | RType of rtype_op * reg * reg * reg (* op rd rs1 rs2 *)
   | IType of itype_op * reg * reg * int (* op rd rs1 imm *)
   | StackType of stack_op * reg * reg (* op rd offset(rs) *)
-  | SType of stype_op * reg * reg * int (* op rs2 rs1 imm *)
+  (*| SType of stype_op * reg * reg * int (* op rs2 rs1 imm *) *)
   | BType of btype_op * reg * reg * string (* op rs1 rs2 imm/label offset *)
   | UType of utype_op * reg * int (* op rd imm *)
   | JType of jtype_op * reg * int (* op rd imm/label offset *)
@@ -103,7 +103,7 @@ let pp_rtype_op fmt = function
 
 let pp_itype_op fmt = function
   | ADDI -> fprintf fmt "addi"
-  | LI -> fprintf fmt "li"
+  (* | LI -> fprintf fmt "li" *)
   | JALR -> fprintf fmt "jalr"
   | SLTI -> fprintf fmt "slti"
   | XORI -> fprintf fmt "xori"
@@ -116,9 +116,9 @@ let pp_stack_op fmt = function
   | SD -> fprintf fmt "sd"
 ;;
 
-let pp_stype_op fmt = function
+(* let pp_stype_op fmt = function
   | SW -> fprintf fmt "sw"
-;;
+;; *)
 
 let pp_btype_op fmt = function
   | BEQ -> fprintf fmt "beq"
@@ -150,8 +150,8 @@ let pp_true_instr fmt = function
     fprintf fmt "@[\t%a %a, %a, %d@]@." pp_itype_op op pp_reg rd pp_reg rs1 imm
   | StackType (op, rd, rs) ->
     fprintf fmt "@[\t%a %a, %a@]@." pp_stack_op op pp_reg rd pp_reg rs
-  | SType (op, rs2, rs1, imm) ->
-    fprintf fmt "@[\t%a %a, %d(%a)@]@." pp_stype_op op pp_reg rs2 imm pp_reg rs1
+  (* | SType (op, rs2, rs1, imm) ->
+    fprintf fmt "@[\t%a %a, %d(%a)@]@." pp_stype_op op pp_reg rs2 imm pp_reg rs1 *)
   | BType (op, rs1, rs2, l) ->
     fprintf fmt "@[\t%a %a, %a, %s@]@." pp_btype_op op pp_reg rs1 pp_reg rs2 l
   | UType (op, rd, imm) -> fprintf fmt "@[\t%a %a, %d@]@." pp_utype_op op pp_reg rd imm

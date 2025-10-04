@@ -35,7 +35,7 @@ let run_single dump_parsetree stop_after eval input_source =
   | Ok ast ->
     if dump_parsetree then print_endline (show_constructions ast);
     let instructions = codegen ast in
-    let _ = Format.fprintf Format.std_formatter ".global _start\n" in
+    let _ = Stdlib.Format.fprintf Stdlib.Format.std_formatter ".global _start\n" in
     let _ = Stdlib.List.iter pp_instr instructions in
     (match stop_after with
      | SA_parsing -> ()

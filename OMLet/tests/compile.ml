@@ -16,6 +16,7 @@ let () =
   match Parser.parse source with
   | Error e -> Stdlib.Format.printf "Parsing error: %s\n%!" e
   | Ok ast ->
+    Stdlib.Format.printf ".global _start\n";
     let asm = Codegen.codegen ast in
     Stdlib.List.iter CodegenTypes.pp_instr asm
 ;;

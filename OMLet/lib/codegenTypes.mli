@@ -14,7 +14,7 @@ type reg =
 
 type storage_place =
   | Offset of int
-  | FuncLabel of string * int 
+  | FuncLabel of string * int
   | Register of reg
 
 val temp : int -> reg

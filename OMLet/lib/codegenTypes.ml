@@ -16,7 +16,7 @@ type reg =
 (* for mapping names with the way they can be reached *)
 type storage_place =
   | Offset of int (* for variables on stack *)
-  | FuncLabel of string * int  (* for functions with labels *)
+  | FuncLabel of string * int (* for functions with labels *)
   | Register of reg (* for values (typically, patterns) in registers *)
 
 let temp i = Temp i

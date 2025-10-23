@@ -14,7 +14,7 @@ type reg =
 
 type storage_place =
   | Offset of int
-  | FuncLabel of string
+  | FuncLabel of string * int 
   | Register of reg
 
 val temp : int -> reg
@@ -56,6 +56,7 @@ type jtype_op = JAL
 
 type pseudo_instr =
   | LI of reg * int
+  | LA of reg * string
   | MV of reg * reg
   | J of string
   | RET

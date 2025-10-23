@@ -16,7 +16,7 @@ type reg =
 (* for mapping names with the way they can be reached *)
 type storage_place =
   | Offset of int (* for variables on stack *)
-  | FuncLabel of string (* for functions with labels *)
+  | FuncLabel of string * int  (* for functions with labels *)
   | Register of reg (* for values (typically, patterns) in registers *)
 
 let temp i = Temp i
@@ -62,6 +62,7 @@ type jtype_op = JAL
 
 type pseudo_instr =
   | LI of reg * int
+  | LA of reg * string
   | MV of reg * reg
   | J of string
   | RET
@@ -141,6 +142,7 @@ let pp_jtype_op fmt = function
 
 let pp_pseudo_instr fmt = function
   | LI (r, imm) -> fprintf fmt "@[\tli %a, %d@]@." pp_reg r imm
+  | LA (r, l) -> fprintf fmt "@[\tla %a, %s@]@." pp_reg r l
   | MV (r1, r2) -> fprintf fmt "@[\tmv %a, %a@]@." pp_reg r1 pp_reg r2
   | J l -> fprintf fmt "@[\tj %s@]@." l
   | RET -> fprintf fmt "@[\tret @]@."

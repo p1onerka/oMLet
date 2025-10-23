@@ -83,6 +83,8 @@ let rec anf (e : expr) (expr_with_hole : immexpr -> aexpr) =
     anf expr (fun immval -> ALet (id, CImmexpr immval, anf body expr_with_hole))
   | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
     anf expr (fun _ -> anf body expr_with_hole)
+  | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
+    anf expr (fun _ -> anf body expr_with_hole)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let arg_names =
       List.map

@@ -1,0 +1,7 @@
+(cram
+ (applies_to fac_partial_appl_test)
+ (deps
+  ../../../repl/repl.exe
+  fac_partial_appl.ml
+  ../../../lib/runtime.c
+  ../build_and_run.sh))

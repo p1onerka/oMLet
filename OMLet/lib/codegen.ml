@@ -56,6 +56,15 @@ let make_label name =
   label
 ;;
 
+let rec lambda_arity_of_aexpr ae =
+  match ae with
+  | ACExpr (CLam (_, inner)) ->
+    let sub_arity, body = lambda_arity_of_aexpr inner in
+    1 + sub_arity, body
+  | ACExpr _ -> 0, ae
+  | ALet _ -> 0, ae
+;;
+
 let codegen_immexpr a_regs placement compiled = function
   | ImmNum n ->
     let instr = Pseudo (LI (List.hd a_regs, n)) in
@@ -67,9 +76,13 @@ let codegen_immexpr a_regs placement compiled = function
        (* change back to Arg 0 here? *)
        let instr = True (StackType (LD, List.hd a_regs, Stack o)) in
        a_regs, placement, instr :: compiled
-     | Some (FuncLabel l) ->
-       let instr = Pseudo (CALL l) in
-       a_regs, placement, instr :: compiled
+     | Some (FuncLabel (l, arity)) ->
+       (* for function identifier: create a closure via runtime *)
+       (* load the function label address into a0, put arity into a1 *)
+       let compiled = Pseudo (LA (Arg 0, l)) :: compiled in
+       let compiled = Pseudo (LI (Arg 1, arity)) :: compiled in
+       let compiled = Pseudo (CALL "alloc_closure") :: compiled in
+       a_regs, placement, compiled
      | Some (Register reg) ->
        (* change back to Arg 0 here? *)
        let instr = Pseudo (MV (List.hd a_regs, reg)) in
@@ -188,17 +201,28 @@ let rec codegen_cexpr a_regs free_regs stack placement compiled = function
         (stack, compiled, [])
         used_temps
     in
-    (* codegen arguments and function expr *)
-    let a_regs_inner, placement, compiled =
+    let nargs = List.length args in
+    let stack, buf_offset = extend_stack stack (8 * nargs) in
+    let _, placement, compiled =
       List.fold_left
-        (fun (a_regs, placement, compiled) c ->
-           let _, a_regs_next = find_argument a_regs in
-           let _, placement, compiled = codegen_immexpr a_regs placement compiled c in
-           a_regs_next, placement, compiled)
+        (fun (a_regs, placement, compiled) (i, arg) ->
+           let arg_reg, _ = find_argument a_regs in
+           let _, placement, compiled = codegen_immexpr a_regs placement compiled arg in
+           (* store args on stack so we can pass the pointer to them and apply via runtime *)
+           let compiled =
+             True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8)))) :: compiled
+           in
+           a_regs, placement, compiled)
         (a_regs, placement, compiled)
-        args
+        (List.mapi (fun i arg -> i, arg) args)
     in
-    let _, placement, compiled = codegen_immexpr a_regs_inner placement compiled func in
+    let _, placement, compiled = codegen_immexpr a_regs placement compiled func in
+    (* so pointer to closure in a0, arity in a1, pointer to args in a2, number of applied args in a3 *)
+    let compiled = True (IType (ADDI, Arg 2, Sp, buf_offset)) :: compiled in
+    let compiled = Pseudo (LI (Arg 3, nargs)) :: compiled in
+    (* call runtime *)
+    let compiled = Pseudo (CALL "apply") :: compiled in
+    let stack = stack - (8 * nargs) in
     (* put all values back into corresponding registers, cleaning stack back *)
     let stack, compiled =
       List.fold_left
@@ -236,8 +260,9 @@ let codegen_astatement a_regs free_regs placement compiled = function
     if is_function st
     then (
       let func_label = make_label name in
+      let arity, _ = lambda_arity_of_aexpr st in
       let compiled = True (Label func_label) :: compiled in
-      let placement = PlacementMap.add name (FuncLabel func_label) placement in
+      let placement = PlacementMap.add name (FuncLabel (func_label, arity)) placement in
       let required_stack = 64 in
       let compiled = True (IType (ADDI, Sp, Sp, -required_stack)) :: compiled in
       let compiled = True (StackType (SD, Ra, Stack 0)) :: compiled in
@@ -300,7 +325,7 @@ let codegen_aconstruction a_regs free_regs stack placement compiled = function
 
 let codegen_aconstructions acs =
   let placement = PlacementMap.empty in
-  let placement = PlacementMap.add "print_int" (FuncLabel "print_int") placement in
+  let placement = PlacementMap.add "print_int" (FuncLabel ("print_int", 1)) placement in
   let free_regs = regs in
   let global_stack = 0 in
   let _, _, _, _, instructions =

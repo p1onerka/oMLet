@@ -64,7 +64,7 @@ let gen_temp base =
   Ident (Stdlib.Format.sprintf "%s_%d" base !count)
 ;;
 
-let binop_map_m = function
+let binop_map = function
   | Binary_add -> return ("res_of_plus", CPlus)
   | Binary_subtract -> return ("res_of_minus", CMinus)
   | Binary_multiply -> return ("res_of_mul", CMul)
@@ -104,7 +104,7 @@ let rec anf e expr_with_hole =
   | Const (Int_lt n) -> expr_with_hole (ImmNum n)
   | Variable id -> expr_with_hole (ImmId id)
   | Bin_expr (op, l, r) ->
-    let* opname, op_name = binop_map_m op in
+    let* opname, op_name = binop_map op in
     anf_binop opname op_name l r expr_with_hole
   | LetIn (_, Let_bind (PVar id, [], expr), [], body) ->
     let* body_anf = anf body expr_with_hole in

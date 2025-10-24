@@ -37,6 +37,11 @@ type aconstruction =
 
 type aconstructions = aconstruction list
 
+type anf_error =
+  | Unreachable
+  | Not_Yet_Implemented of string
+
 val count : int ref
 val gen_temp : string -> ident
-val anf_constructions : construction list -> aconstructions
+val anf_constructions : construction list -> (aconstruction list, anf_error) result
+val pp_anf_error : Format.formatter -> anf_error -> unit

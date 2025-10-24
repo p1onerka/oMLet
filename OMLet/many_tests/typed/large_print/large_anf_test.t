@@ -2,7 +2,7 @@ Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
   $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile large_print.ml
-  let large =                          
+  let large =
   fun x -> 
   let neq_3 = 0 <> x in
     if neq_3

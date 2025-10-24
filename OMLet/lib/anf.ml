@@ -120,8 +120,7 @@ let rec anf (e : expr) (expr_with_hole : immexpr -> aexpr) =
   | _ -> failwith "anf expr NYI"
 ;;
 
-let anf_construction (c : construction) : aconstruction =
-  match c with
+let anf_construction = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
     let value = anf expr (fun immval -> ACExpr (CImmexpr immval)) in
     AStatement (flag, [ id, value ])
@@ -142,8 +141,7 @@ let anf_construction (c : construction) : aconstruction =
   | _ -> failwith "anf construction NYI"
 ;;
 
-let rec anf_constructions (cs : construction list) : aconstructions =
-  match cs with
+let rec anf_constructions = function
   | c :: rest -> anf_construction c :: anf_constructions rest
   | [] -> []
 ;;

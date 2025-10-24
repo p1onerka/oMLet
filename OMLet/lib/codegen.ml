@@ -256,44 +256,42 @@ let is_function = function
 ;;
 
 let codegen_astatement a_regs free_regs placement compiled = function
-  | Ident name, st ->
-    if is_function st
-    then (
-      let func_label = make_label name in
-      let arity, _ = lambda_arity_of_aexpr st in
-      let compiled = True (Label func_label) :: compiled in
-      let placement = PlacementMap.add name (FuncLabel (func_label, arity)) placement in
-      let required_stack = 64 in
-      let compiled = True (IType (ADDI, Sp, Sp, -required_stack)) :: compiled in
-      let compiled = True (StackType (SD, Ra, Stack 0)) :: compiled in
-      let fresh_stack = 8 in
-      let _, _, stack, placement, compiled =
-        codegen_aexpr a_regs free_regs fresh_stack placement compiled st
-      in
-      let compiled =
-        Pseudo RET
-        :: True (IType (ADDI, Sp, Sp, required_stack))
-        :: True (StackType (LD, Ra, Stack 0))
-        :: compiled
-      in
-      a_regs, free_regs, stack, placement, compiled)
-    (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
-    else (
-      let is_global, compiled =
-        if !is_start_label_put
-        then false, compiled
-        else (
-          is_start_label_put := true;
-          true, True (IType (ADDI, Sp, Sp, -64)) :: True (Label start_label) :: compiled)
-      in
-      (* TODO: maybe put it in placement here? *)
-      let _, _, stack, placement, compiled =
-        codegen_aexpr a_regs free_regs 0 placement compiled st
-      in
-      let compiled =
-        if is_global then True (IType (ADDI, Sp, Sp, 64)) :: compiled else compiled
-      in
-      a_regs, free_regs, stack, placement, compiled)
+  | Ident name, st when is_function st ->
+    let func_label = make_label name in
+    let arity, _ = lambda_arity_of_aexpr st in
+    let compiled = True (Label func_label) :: compiled in
+    let placement = PlacementMap.add name (FuncLabel (func_label, arity)) placement in
+    let required_stack = 64 in
+    let compiled = True (IType (ADDI, Sp, Sp, -required_stack)) :: compiled in
+    let compiled = True (StackType (SD, Ra, Stack 0)) :: compiled in
+    let fresh_stack = 8 in
+    let _, _, stack, placement, compiled =
+      codegen_aexpr a_regs free_regs fresh_stack placement compiled st
+    in
+    let compiled =
+      Pseudo RET
+      :: True (IType (ADDI, Sp, Sp, required_stack))
+      :: True (StackType (LD, Ra, Stack 0))
+      :: compiled
+    in
+    a_regs, free_regs, stack, placement, compiled
+  (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
+  | Ident _, st ->
+    let is_global, compiled =
+      if !is_start_label_put
+      then false, compiled
+      else (
+        is_start_label_put := true;
+        true, True (IType (ADDI, Sp, Sp, -64)) :: True (Label start_label) :: compiled)
+    in
+    (* TODO: maybe put it in placement here? *)
+    let _, _, stack, placement, compiled =
+      codegen_aexpr a_regs free_regs 0 placement compiled st
+    in
+    let compiled =
+      if is_global then True (IType (ADDI, Sp, Sp, 64)) :: compiled else compiled
+    in
+    a_regs, free_regs, stack, placement, compiled
 ;;
 
 let codegen_aconstruction a_regs free_regs stack placement compiled = function

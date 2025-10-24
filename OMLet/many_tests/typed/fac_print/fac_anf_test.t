@@ -2,7 +2,7 @@ Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
   $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile fac_print.ml
-  let rec fac =                        
+  let rec fac =
   fun n -> 
   let lte_4 = n <= 1 in
     if lte_4

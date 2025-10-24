@@ -2,7 +2,7 @@ Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
   $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile fib_print.ml
-  let rec fib =                        
+  let rec fib =
   fun n -> 
   let lt_6 = n < 2 in
     if lt_6

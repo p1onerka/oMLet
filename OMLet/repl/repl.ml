@@ -41,18 +41,20 @@ let run_single dump_parsetree dump_anf stop_after eval input_source =
       print_endline (show_constructions ast);
       ())
     else (
-      let anf = anf_constructions ast in
-      if dump_anf
-      then (
-        Stdlib.Format.printf "%a@." pp_aconstructions anf;
-        ())
-      else (
-        let instructions = codegen_aconstructions anf in
-        Stdlib.Format.fprintf Stdlib.Format.std_formatter ".global _start\n";
-        Stdlib.List.iter pp_instr instructions);
-      match stop_after with
-      | SA_parsing -> ()
-      | SA_never -> eval ast)
+      match anf_constructions ast with
+      | Result.Error e -> Stdlib.Format.printf "%a@." pp_anf_error e
+      | Result.Ok anf ->
+        if dump_anf
+        then (
+          Stdlib.Format.printf "%a@." pp_aconstructions anf;
+          ())
+        else (
+          let instructions = codegen_aconstructions anf in
+          Stdlib.Format.fprintf Stdlib.Format.std_formatter ".global _start\n";
+          Stdlib.List.iter pp_instr instructions);
+        (match stop_after with
+         | SA_parsing -> ()
+         | SA_never -> eval ast))
 ;;
 
 let () =

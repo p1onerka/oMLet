@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Format
 
 type immexpr =
   | ImmNum of int (* 42 *)
@@ -37,6 +38,25 @@ type aconstruction =
 
 type aconstructions = aconstruction list
 
+type anf_error =
+  | Unreachable
+  | Not_Yet_Implemented of string
+
+let pp_anf_error fmt e =
+  match e with
+  | Unreachable -> fprintf fmt "Panic: reached unreachable state in ANF computation"
+  | Not_Yet_Implemented str ->
+    fprintf fmt "ANF for this structure is not yet implemented: %s" str
+;;
+
+let ( let* ) x f =
+  match x with
+  | Ok x -> f x
+  | Result.Error e -> Result.Error e
+;;
+
+let return x = Result.Ok x
+let fail e = Result.Error e
 let count = ref 0
 
 let gen_temp base =
@@ -44,18 +64,18 @@ let gen_temp base =
   Ident (Stdlib.Format.sprintf "%s_%d" base !count)
 ;;
 
-let binop_map = function
-  | Binary_add -> "res_of_plus", CPlus
-  | Binary_subtract -> "res_of_minus", CMinus
-  | Binary_multiply -> "res_of_mul", CMul
-  | Binary_divide -> "res_of_div", CDiv
-  | Binary_equal -> "eq", CEq
-  | Binary_unequal -> "neq", CNeq
-  | Binary_less -> "lt", CLt
-  | Binary_less_or_equal -> "lte", CLte
-  | Binary_greater -> "gt", CGt
-  | Binary_greater_or_equal -> "gte", CGte
-  | _ -> failwith "NYI"
+let binop_map_m = function
+  | Binary_add -> return ("res_of_plus", CPlus)
+  | Binary_subtract -> return ("res_of_minus", CMinus)
+  | Binary_multiply -> return ("res_of_mul", CMul)
+  | Binary_divide -> return ("res_of_div", CDiv)
+  | Binary_equal -> return ("eq", CEq)
+  | Binary_unequal -> return ("neq", CNeq)
+  | Binary_less -> return ("lt", CLt)
+  | Binary_less_or_equal -> return ("lte", CLte)
+  | Binary_greater -> return ("gt", CGt)
+  | Binary_greater_or_equal -> return ("gte", CGte)
+  | _ -> fail (Not_Yet_Implemented "binary operator")
 ;;
 
 let rec collect_app_args e =
@@ -66,82 +86,103 @@ let rec collect_app_args e =
   | _ -> e, []
 ;;
 
-let rec anf (e : expr) (expr_with_hole : immexpr -> aexpr) =
+let rec anf e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
     let varname = gen_temp opname in
-    anf left (fun limm ->
-      anf right (fun rimm ->
-        ALet (varname, CBinop (op, limm, rimm), expr_with_hole (ImmId varname))))
+    let* left_anf =
+      anf left (fun limm ->
+        let* right_anf =
+          anf right (fun rimm ->
+            let* inner = expr_with_hole (ImmId varname) in
+            return (ALet (varname, CBinop (op, limm, rimm), inner)))
+        in
+        return right_anf)
+    in
+    return left_anf
   in
   match e with
   | Const (Int_lt n) -> expr_with_hole (ImmNum n)
   | Variable id -> expr_with_hole (ImmId id)
   | Bin_expr (op, l, r) ->
-    let opname, op_name = binop_map op in
+    let* opname, op_name = binop_map_m op in
     anf_binop opname op_name l r expr_with_hole
   | LetIn (_, Let_bind (PVar id, [], expr), [], body) ->
-    anf expr (fun immval -> ALet (id, CImmexpr immval, anf body expr_with_hole))
+    let* body_anf = anf body expr_with_hole in
+    anf expr (fun immval -> return (ALet (id, CImmexpr immval, body_anf)))
   | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
     anf expr (fun _ -> anf body expr_with_hole)
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
     anf expr (fun _ -> anf body expr_with_hole)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
-    let arg_names =
-      List.map
-        (function
-          | PVar s -> s
-          | _ -> failwith "complex patterns NYI")
+    let* arg_names =
+      List.fold_right
+        (fun pat acc ->
+           let* names = acc in
+           match pat with
+           | PVar s -> return (s :: names)
+           | _ -> fail (Not_Yet_Implemented "complex patterns"))
         args
+        (return [])
     in
-    let value = anf expr (fun imm -> ACExpr (CImmexpr imm)) in
+    let* value = anf expr (fun imm -> return (ACExpr (CImmexpr imm))) in
     let clams =
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
-    let cclams =
+    let* cclams =
       match clams with
-      | ACExpr c -> c
-      | _ -> failwith "unreachable"
+      | ACExpr c -> return c
+      | _ -> fail Unreachable
     in
-    ALet (id, cclams, anf body expr_with_hole)
+    let* body = anf body expr_with_hole in
+    return (ALet (id, cclams, body))
   | If_then_else (cond, thn, Some els) ->
-    anf cond (fun condimm ->
-      ACExpr
-        (CIte (CImmexpr condimm, anf thn expr_with_hole, Some (anf els expr_with_hole))))
+    let* thn = anf thn expr_with_hole in
+    let* els = anf els expr_with_hole in
+    anf cond (fun condimm -> return (ACExpr (CIte (CImmexpr condimm, thn, Some els))))
   | Apply (f, args) ->
     let f, arg_exprs = collect_app_args (Apply (f, args)) in
     anf f (fun fimm ->
       let rec anf_args acc = function
         | [] ->
           let varname = gen_temp "res_of_app" in
-          ALet (varname, CApp (fimm, List.rev acc), expr_with_hole (ImmId varname))
+          let* e = expr_with_hole (ImmId varname) in
+          return (ALet (varname, CApp (fimm, List.rev acc), e))
         | expr :: rest -> anf expr (fun immval -> anf_args (immval :: acc) rest)
       in
       anf_args [] arg_exprs)
-  | _ -> failwith "anf expr NYI"
+  | _ -> fail (Not_Yet_Implemented "ANF expr")
 ;;
 
 let anf_construction = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
-    let value = anf expr (fun immval -> ACExpr (CImmexpr immval)) in
-    AStatement (flag, [ id, value ])
+    let* value = anf expr (fun immval -> return (ACExpr (CImmexpr immval))) in
+    return (AStatement (flag, [ id, value ]))
   | Statement (Let (flag, Let_bind (PVar name, args, expr), [])) ->
-    let arg_names =
-      List.map
-        (function
-          | PVar s -> s
-          | _ -> failwith "complex patterns NYI")
+    let* arg_names =
+      List.fold_right
+        (fun pat acc ->
+           let* names = acc in
+           match pat with
+           | PVar s -> return (s :: names)
+           | _ -> fail (Not_Yet_Implemented "complex patterns"))
         args
+        (return [])
     in
-    let value = anf expr (fun imm -> ACExpr (CImmexpr imm)) in
+    let* value = anf expr (fun imm -> return (ACExpr (CImmexpr imm))) in
     let clams =
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
-    AStatement (flag, [ name, clams ])
-  | Expr e -> AExpr (anf e (fun immval -> ACExpr (CImmexpr immval)))
-  | _ -> failwith "anf construction NYI"
+    return (AStatement (flag, [ name, clams ]))
+  | Expr e ->
+    let* inner = anf e (fun immval -> return (ACExpr (CImmexpr immval))) in
+    return (AExpr inner)
+  | _ -> fail (Not_Yet_Implemented "ANF construction")
 ;;
 
 let rec anf_constructions = function
-  | c :: rest -> anf_construction c :: anf_constructions rest
-  | [] -> []
+  | c :: rest ->
+    let* c_anf = anf_construction c in
+    let* rest_anf = anf_constructions rest in
+    return (c_anf :: rest_anf)
+  | [] -> return []
 ;;

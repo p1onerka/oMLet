@@ -41,7 +41,12 @@ type anf_error =
   | Unreachable
   | Not_Yet_Implemented of string
 
-val count : int ref
-val gen_temp : string -> ident
-val anf_constructions : construction list -> (aconstruction list, anf_error) result
+open ResultCounter
+
+val gen_temp : string -> (ident, 'a) ResultCounterMonad.t
+
+val anf_constructions
+  :  construction list
+  -> (aconstruction list, anf_error) ResultCounterMonad.t
+
 val pp_anf_error : Format.formatter -> anf_error -> unit

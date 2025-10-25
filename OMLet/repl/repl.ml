@@ -8,6 +8,7 @@ open OMLet.Codegen
 open OMLet.CodegenTypes
 open OMLet.Anf
 open OMLet.AnfPrettyPrinter
+open OMLet.ResultCounter.ResultCounterMonad
 open Base
 open Stdio
 
@@ -41,9 +42,9 @@ let run_single dump_parsetree dump_anf stop_after eval input_source =
       print_endline (show_constructions ast);
       ())
     else (
-      match anf_constructions ast with
+      match run (anf_constructions ast) 0 with
       | Result.Error e -> Stdlib.Format.printf "%a@." pp_anf_error e
-      | Result.Ok anf ->
+      | Result.Ok (anf, _) ->
         if dump_anf
         then (
           Stdlib.Format.printf "%a@." pp_aconstructions anf;

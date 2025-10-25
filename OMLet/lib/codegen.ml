@@ -358,50 +358,49 @@ let is_function = function
   | _ -> false
 ;;
 
-let codegen_astatement = function
-  | Ident name, st ->
-    let* state = read in
-    if is_function st
-    then
-      let* func_label = make_label name in
-      let arity, _ = lambda_arity_of_aexpr st in
-      let* () = add_instr (True (Label func_label)) in
-      let new_placement =
-        PlacementMap.add name (FuncLabel (func_label, arity)) state.placement
-      in
-      let* () = update_placement new_placement in
-      let required_stack = 64 in
-      let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack))) in
-      let* () = add_instr (True (StackType (SD, Ra, Stack 0))) in
-      let fresh_stack = 8 in
-      let* () = update_stack fresh_stack in
-      let old_a_regs = state.a_regs in
-      let old_free_regs = state.free_regs in
-      let* () = codegen_aexpr st in
-      let* () = update_a_regs old_a_regs in
-      let* () = update_free_regs old_free_regs in
-      let* () = add_instr (True (StackType (LD, Ra, Stack 0))) in
-      let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack))) in
-      add_instr (Pseudo RET)
+let codegen_astatement astmt =
+  let* state = read in
+  match astmt with
+  | Ident name, st when is_function st ->
+    let* func_label = make_label name in
+    let arity, _ = lambda_arity_of_aexpr st in
+    let* () = add_instr (True (Label func_label)) in
+    let new_placement =
+      PlacementMap.add name (FuncLabel (func_label, arity)) state.placement
+    in
+    let* () = update_placement new_placement in
+    let required_stack = 64 in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack))) in
+    let* () = add_instr (True (StackType (SD, Ra, Stack 0))) in
+    let fresh_stack = 8 in
+    let* () = update_stack fresh_stack in
+    let old_a_regs = state.a_regs in
+    let old_free_regs = state.free_regs in
+    let* () = codegen_aexpr st in
+    let* () = update_a_regs old_a_regs in
+    let* () = update_free_regs old_free_regs in
+    let* () = add_instr (True (StackType (LD, Ra, Stack 0))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack))) in
+    add_instr (Pseudo RET)
     (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
-    else
-      let* is_global =
-        if state.is_start_label_put
-        then return false
-        else
-          let* () = update_is_start_label_put true in
-          let* () = add_instr (True (Label start_label)) in
-          let* () = add_instr (True (IType (ADDI, Sp, Sp, -64))) in
-          return true
-      in
-      let* () = update_stack 0 in
-      (* TODO: maybe put it in placement here? *)
-      let old_a_regs = state.a_regs in
-      let old_free_regs = state.free_regs in
-      let* () = codegen_aexpr st in
-      let* () = update_a_regs old_a_regs in
-      let* () = update_free_regs old_free_regs in
-      if is_global then add_instr (True (IType (ADDI, Sp, Sp, 64))) else return ()
+  | Ident _, st ->
+    let* is_global =
+      if state.is_start_label_put
+      then return false
+      else
+        let* () = update_is_start_label_put true in
+        let* () = add_instr (True (Label start_label)) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, -64))) in
+        return true
+    in
+    let* () = update_stack 0 in
+    (* TODO: maybe put it in placement here? *)
+    let old_a_regs = state.a_regs in
+    let old_free_regs = state.free_regs in
+    let* () = codegen_aexpr st in
+    let* () = update_a_regs old_a_regs in
+    let* () = update_free_regs old_free_regs in
+    if is_global then add_instr (True (IType (ADDI, Sp, Sp, 64))) else return ()
 ;;
 
 let codegen_aconstruction aconstr =

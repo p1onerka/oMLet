@@ -2,6 +2,6 @@
  (applies_to fib_partial_appl_test)
  (deps
   ../../../repl/repl.exe
-  fib_partial_appl.ml
   ../../../lib/runtime.c
-  ../build_and_run.sh))
+  ../build_and_run.sh
+  ../../manytests/typed/010fibcps_ll.ml))

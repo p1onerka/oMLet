@@ -2,6 +2,6 @@
  (applies_to fac_anf_exit_code_test)
  (deps
   ../../../repl/repl.exe
-  fac_anf_exit_code.ml
   ../../../lib/runtime.c
-  ../build_and_run.sh))
+  ../build_and_run.sh
+  ../../manytests/typed/010fac_anf.ml))

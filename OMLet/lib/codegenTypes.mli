@@ -1,6 +1,7 @@
 (** Copyright 2025, Ksenia Kotelnikova <xeniia.ka@gmail.com>, Sofya Kozyreva <k81sofia@gmail.com>, Vyacheslav Kochergin <vyacheslav.kochergin1@gmail.com> *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Format
 
 type reg =
@@ -12,10 +13,10 @@ type reg =
   | Saved of int
   | Arg of int
 
-type storage_place =
-  | Offset of int
-  | FuncLabel of string
-  | Register of reg
+type meta_info =
+  | Var of int
+  | Func of string * int
+  | Value of reg
 
 val temp : int -> reg
 val saved : int -> reg
@@ -56,6 +57,7 @@ type jtype_op = JAL
 
 type pseudo_instr =
   | LI of reg * int
+  | LA of reg * string
   | MV of reg * reg
   | J of string
   | RET

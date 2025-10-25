@@ -1,6 +1,7 @@
 (** Copyright 2025, Ksenia Kotelnikova <xeniia.ka@gmail.com>, Sofya Kozyreva <k81sofia@gmail.com>, Vyacheslav Kochergin <vyacheslav.kochergin1@gmail.com> *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ast
 
 type immexpr =
@@ -36,6 +37,16 @@ type aconstruction =
 
 type aconstructions = aconstruction list
 
-val count : int ref
-val gen_temp : string -> ident
-val anf_constructions : construction list -> aconstructions
+type anf_error =
+  | Unreachable
+  | Not_Yet_Implemented of string
+
+open ResultCounter
+
+val gen_temp : string -> (ident, 'a) ResultCounterMonad.t
+
+val anf_constructions
+  :  construction list
+  -> (aconstruction list, anf_error) ResultCounterMonad.t
+
+val pp_anf_error : Format.formatter -> anf_error -> unit

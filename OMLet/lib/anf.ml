@@ -49,19 +49,14 @@ let pp_anf_error fmt e =
     fprintf fmt "ANF for this structure is not yet implemented: %s" str
 ;;
 
-let ( let* ) x f =
-  match x with
-  | Ok x -> f x
-  | Result.Error e -> Result.Error e
-;;
-
-let return x = Result.Ok x
-let fail e = Result.Error e
-let count = ref 0
+open ResultCounter.ResultCounterMonad
+open Syntax
 
 let gen_temp base =
-  count := !count + 1;
-  Ident (Stdlib.Format.sprintf "%s_%d" base !count)
+  let* c = read in
+  let new_c = c + 1 in
+  let* () = write new_c in
+  return (Ident (Stdlib.Format.sprintf "%s_%d" base c))
 ;;
 
 let binop_map = function
@@ -88,7 +83,7 @@ let rec collect_app_args e =
 
 let rec anf e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
-    let varname = gen_temp opname in
+    let* varname = gen_temp opname in
     let* left_anf =
       anf left (fun limm ->
         let* right_anf =
@@ -144,7 +139,7 @@ let rec anf e expr_with_hole =
     anf f (fun fimm ->
       let rec anf_args acc = function
         | [] ->
-          let varname = gen_temp "res_of_app" in
+          let* varname = gen_temp "res_of_app" in
           let* e = expr_with_hole (ImmId varname) in
           return (ALet (varname, CApp (fimm, List.rev acc), e))
         | expr :: rest -> anf expr (fun immval -> anf_args (immval :: acc) rest)

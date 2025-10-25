@@ -11,7 +11,8 @@
   TypesPp
   TypedTree
   Codegen
-  CodegenTypes)
+  CodegenTypes
+  ResultCounter)
  (libraries base angstrom qcheck-core qcheck-core.runner)
  (instrumentation
   (backend bisect_ppx))

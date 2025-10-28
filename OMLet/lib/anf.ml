@@ -184,9 +184,8 @@ let rec anf e expr_with_hole =
 let rec lift_aexpr aexpr lifted_functions =
   match aexpr with
   | ALet (varname, CLam (id, ae), body) ->
-    let* lifted_name = gen_temp "lifted_lam" in
-    let lifted_functions = (lifted_name, CLam (id, ae)) :: lifted_functions in
-    return (ALet (varname, CImmexpr (ImmId lifted_name), body), lifted_functions)
+    let lifted_functions = (varname, CLam (id, ae)) :: lifted_functions in
+    return (body, lifted_functions)
   (* | ACExpr (CLam (id, body)) ->
     let* lifted, lifted_functions = lift_aexpr body lifted_functions in
     return (ACExpr (CLam (id, lifted)), lifted_functions) *)

@@ -8,6 +8,7 @@ open Format
 type immexpr =
   | ImmNum of int (* 42 *)
   | ImmId of ident (* a *)
+[@@deriving show { with_path = false }]
 
 type cbinop =
   | CPlus (* 42 + a *)
@@ -20,6 +21,7 @@ type cbinop =
   | CLte (* 42 <= a *)
   | CGt (* 42 > a *)
   | CGte (* 42 >= a *)
+[@@deriving show { with_path = false }]
 
 type cexpr =
   | CBinop of cbinop * immexpr * immexpr
@@ -27,25 +29,30 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr (* fun a -> a + 42 *)
   | CApp of immexpr * immexpr list (* func_name arg1 arg2 ... argn *)
+[@@deriving show { with_path = false }]
 
 and aexpr =
   | ALet of ident * cexpr * aexpr
   | ACExpr of cexpr
+[@@deriving show { with_path = false }]
 
 type aconstruction =
   | AExpr of aexpr
   | AStatement of is_recursive * (ident * aexpr) list
+[@@deriving show { with_path = false }]
 
-type aconstructions = aconstruction list
+type aconstructions = aconstruction list [@@deriving show { with_path = false }]
 
 type anf_error =
   | Unreachable
   | Not_Yet_Implemented of string
+[@@deriving show { with_path = false }]
 
 let pp_anf_error fmt = function
   | Unreachable -> fprintf fmt "Panic: reached unreachable state in ANF computation"
   | Not_Yet_Implemented str ->
     fprintf fmt "ANF for this structure is not yet implemented: %s" str
+[@@deriving show { with_path = false }]
 ;;
 
 open ResultCounter.ResultCounterMonad
@@ -144,8 +151,66 @@ let rec anf e expr_with_hole =
         | expr :: rest -> anf expr (fun immval -> anf_args (immval :: acc) rest)
       in
       anf_args [] arg_exprs)
-  | _ -> fail (Not_Yet_Implemented "ANF expr")
+  | Lambda (first, rest, body) ->
+    let* arg_names =
+      List.fold_right
+        (fun pat acc ->
+           let* names = acc in
+           match pat with
+           | PVar s -> return (s :: names)
+           | _ -> fail (Not_Yet_Implemented "complex patterns"))
+        (first :: rest)
+        (return [])
+    in
+    let* varname = gen_temp "lam" in
+    Stdlib.Format.printf "body ast %a@.\n" pp_expr body;
+    let* e = expr_with_hole (ImmId varname) in
+    let* body = anf body (fun imm -> return (ACExpr (CImmexpr imm))) in
+    Stdlib.Format.printf "body anf %a@.\n" pp_aexpr body;
+    let clams =
+      List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names body
+    in
+    let* cclams =
+      match clams with
+      | ACExpr c -> return c
+      | _ -> fail Unreachable
+    in
+    return (ALet (varname, cclams, e))
+  | e ->
+    Stdlib.Format.printf "%a@." pp_expr e;
+    fail (Not_Yet_Implemented "ANF expr")
 ;;
+
+let rec lift_aexpr aexpr lifted_functions =
+  match aexpr with
+  | ALet (varname, CLam (id, ae), body) ->
+    let* lifted_name = gen_temp "lifted_lam" in
+    let lifted_functions = (lifted_name, CLam (id, ae)) :: lifted_functions in
+    return (ALet (varname, CImmexpr (ImmId lifted_name), body), lifted_functions)
+  (* | ACExpr (CLam (id, body)) ->
+    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
+    return (ACExpr (CLam (id, lifted)), lifted_functions) *)
+  | ACExpr cexpr ->
+    let* lifted, lifted_functions = lift_cexpr cexpr lifted_functions in
+    return (ACExpr lifted, lifted_functions)
+  | a -> return (a, lifted_functions)
+
+and lift_cexpr cexpr lifted_functions =
+  match cexpr with
+  | CLam (id, body) ->
+    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
+    return (CLam (id, lifted), lifted_functions)
+  | CIte (ccond, thn, Some els) ->
+    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
+    let* lifted_els, lifted_functions3 = lift_aexpr els lifted_functions2 in
+    return (CIte (ccond, lifted_thn, Some lifted_els), lifted_functions3)
+  | CIte (ccond, thn, None) ->
+    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
+    return (CIte (ccond, lifted_thn, None), lifted_functions2)
+  | c -> return (c, lifted_functions)
+;;
+
+(* other cexprs remain untouched for now *)
 
 let anf_construction = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
@@ -173,10 +238,45 @@ let anf_construction = function
   | _ -> fail (Not_Yet_Implemented "ANF construction")
 ;;
 
+let lift_aconstruction ac lifted_functions =
+  match ac with
+  | AExpr ae ->
+    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
+    return (AExpr ae', lifted_functions)
+  | AStatement (flag, [ (id, ae) ]) ->
+    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
+    return (AStatement (flag, [ id, ae' ]), lifted_functions)
+  | a -> return (a, lifted_functions)
+;;
+
 let rec anf_constructions = function
   | c :: rest ->
     let* c_anf = anf_construction c in
     let* rest_anf = anf_constructions rest in
     return (c_anf :: rest_anf)
   | [] -> return []
+;;
+
+let rec lift_aconstructions acs lifted_functions =
+  match acs with
+  | [] -> return ([], lifted_functions)
+  | ac :: rest ->
+    let* ac', lifted_functions2 = lift_aconstruction ac lifted_functions in
+    let* rest', lifted_functions3 = lift_aconstructions rest lifted_functions2 in
+    return (ac' :: rest', lifted_functions3)
+;;
+
+let lift_program acs =
+  let lifted_functions = [] in
+  (* reset global state *)
+  let* acs', lifted_functions = lift_aconstructions acs lifted_functions in
+  let lifted_top_level =
+    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_functions
+  in
+  return (lifted_top_level @ acs')
+;;
+
+let anf_and_lift_program ast =
+  let* anf_program = anf_constructions ast in
+  lift_program anf_program
 ;;

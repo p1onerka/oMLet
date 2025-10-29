@@ -229,8 +229,10 @@ let rec anf_constructions = function
   | [] -> return []
 ;;
 
+(* CC and LL *)
 module IdentSet = Set.Make (struct
     type t = ident
+
     let compare = compare
   end)
 
@@ -246,6 +248,7 @@ let find_lifted (id : ident) (lams : (ident * cexpr) list) : cexpr option =
   | None -> None
 ;;
 
+(* collect free vars: from fun m -> k (m*n) we get {k, n} *)
 let rec free_vars_imm immexpr =
   match immexpr with
   | ImmId id ->
@@ -304,14 +307,6 @@ and free_vars_cexpr cexpr =
     IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
 ;;
 
-let lift_program acs =
-  let lifted_functions = !pre_lifted_functions @ !pre_lifted_letins in
-  let lifted_top_level =
-    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_functions
-  in
-  return (lifted_top_level @ acs)
-;;
-
 module IdentMap = Map.Make (struct
     type t = ident
 
@@ -327,6 +322,7 @@ let collect_freevars_map (lams : (ident * cexpr) list) : IdentSet.t IdentMap.t =
     lams
 ;;
 
+(* add free vars: from fun m -> k (m*n) to fun k n m -> k (m*n) *)
 let add_free_args_lam (lams : (ident * cexpr) list) : (ident * cexpr) list =
   List.map
     (fun (id, expr) ->
@@ -339,6 +335,7 @@ let add_free_args_lam (lams : (ident * cexpr) list) : (ident * cexpr) list =
     lams
 ;;
 
+(* apply args: from fun k n m -> k (m*n) to (fun k n m -> k (m*n)) k n *)
 let rec apply_lifted_args_aexpr env (ae : aexpr) : aexpr =
   match ae with
   | ALet (id, ce, body) ->
@@ -368,10 +365,19 @@ let apply_lifted_args_aconstruction env = function
     AStatement (flag, binds')
 ;;
 
+(* lift lambdas *)
+let lift_program acs =
+  let lifted_functions = !pre_lifted_functions @ !pre_lifted_letins in
+  let lifted_top_level =
+    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_functions
+  in
+  return (lifted_top_level @ acs)
+;;
+
 let anf_and_lift_program ast =
   let* anf_program = anf_constructions ast in
   let fv_map = collect_freevars_map !pre_lifted_functions in
-    let letins =
+  let letins =
     List.map
       (fun (id, expr) -> id, apply_lifted_args_cexpr fv_map expr)
       !pre_lifted_letins
@@ -385,12 +391,12 @@ let anf_and_lift_program ast =
   in
   pre_lifted_functions := lams;
   pre_lifted_letins := letins;
-  List.iter
+  (* List.iter
     (fun (id, expr) ->
        let fv = free_vars_cexpr expr in
        (* Format.printf "wrapped %a@. %a\n" pp_cexpr expr pp_ident id) *)
        Format.printf "Free vars in %s: %a@." (show_ident id) pp_identset fv)
-    wrapped;
+    wrapped; *)
   (* pre_lifted_functions := add_free_args_lam !pre_lifted_functions; *)
   lift_program anf_program_with_apps
 ;;

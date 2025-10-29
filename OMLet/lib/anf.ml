@@ -87,6 +87,9 @@ let rec collect_app_args e =
   | _ -> e, []
 ;;
 
+let pre_lifted_functions = ref []
+let pre_lifted_letins = ref []
+
 let rec anf e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
     let* varname = gen_temp opname in
@@ -135,7 +138,10 @@ let rec anf e expr_with_hole =
       | _ -> fail Unreachable
     in
     let* body = anf body expr_with_hole in
-    return (ALet (id, cclams, body))
+    let* lifted_name = gen_temp "lifted_letin" in
+    pre_lifted_letins := (id, cclams) :: !pre_lifted_letins ;
+    (* return (ALet (id, cclams, body)) *)
+    return body
   | If_then_else (cond, thn, Some els) ->
     let* thn = anf thn expr_with_hole in
     let* els = anf els expr_with_hole in
@@ -175,41 +181,21 @@ let rec anf e expr_with_hole =
       | ACExpr c -> return c
       | _ -> fail Unreachable
     in
-    return (ALet (varname, cclams, e))
+    (* | ALet (varname, CLam (id, ae), body) ->
+    let lifted_functions = (varname, CLam (id, ae)) :: lifted_functions in
+    Stdlib.Format.printf "CLam %a@. %a\n" pp_cexpr (CLam (id, ae)) pp_ident varname;
+    return (body, lifted_functions) *)
+    let* lifted_name = gen_temp "lifted_lam" in
+    pre_lifted_functions := (lifted_name, cclams) :: !pre_lifted_functions ;
+    (* pre_lifted_functions := !pre_lifted_functions @ [ (lifted_name, cclams) ]; *)
+
+    (* pre_lifted_functions := (varname, cclams) :: !pre_lifted_functions; *)
+    (* return e *)
+     return (ALet (varname, CImmexpr (ImmId lifted_name), e))
   | e ->
     Stdlib.Format.printf "%a@." pp_expr e;
     fail (Not_Yet_Implemented "ANF expr")
 ;;
-
-let rec lift_aexpr aexpr lifted_functions =
-  match aexpr with
-  | ALet (varname, CLam (id, ae), body) ->
-    let lifted_functions = (varname, CLam (id, ae)) :: lifted_functions in
-    return (body, lifted_functions)
-  (* | ACExpr (CLam (id, body)) ->
-    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
-    return (ACExpr (CLam (id, lifted)), lifted_functions) *)
-  | ACExpr cexpr ->
-    let* lifted, lifted_functions = lift_cexpr cexpr lifted_functions in
-    return (ACExpr lifted, lifted_functions)
-  | a -> return (a, lifted_functions)
-
-and lift_cexpr cexpr lifted_functions =
-  match cexpr with
-  | CLam (id, body) ->
-    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
-    return (CLam (id, lifted), lifted_functions)
-  | CIte (ccond, thn, Some els) ->
-    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
-    let* lifted_els, lifted_functions3 = lift_aexpr els lifted_functions2 in
-    return (CIte (ccond, lifted_thn, Some lifted_els), lifted_functions3)
-  | CIte (ccond, thn, None) ->
-    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
-    return (CIte (ccond, lifted_thn, None), lifted_functions2)
-  | c -> return (c, lifted_functions)
-;;
-
-(* other cexprs remain untouched for now *)
 
 let anf_construction = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
@@ -237,23 +223,136 @@ let anf_construction = function
   | _ -> fail (Not_Yet_Implemented "ANF construction")
 ;;
 
-let lift_aconstruction ac lifted_functions =
-  match ac with
-  | AExpr ae ->
-    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
-    return (AExpr ae', lifted_functions)
-  | AStatement (flag, [ (id, ae) ]) ->
-    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
-    return (AStatement (flag, [ id, ae' ]), lifted_functions)
-  | a -> return (a, lifted_functions)
-;;
-
 let rec anf_constructions = function
   | c :: rest ->
     let* c_anf = anf_construction c in
     let* rest_anf = anf_constructions rest in
     return (c_anf :: rest_anf)
   | [] -> return []
+;;
+
+module IdentSet = Set.Make (struct
+    type t = ident
+
+    let compare = compare
+  end)
+
+let pp_identset fmt s =
+  Format.fprintf fmt "{";
+  IdentSet.iter (fun (Ident id) -> Format.fprintf fmt "%s; " id) s;
+  Format.fprintf fmt "}"
+;;
+
+let free_vars_imm immexpr =
+  match immexpr with
+  | ImmId id -> IdentSet.singleton id
+  | ImmNum _ -> IdentSet.empty
+;;
+
+let rec free_vars_aexpr (expr : aexpr) : IdentSet.t =
+  match expr with
+  | ALet (id, cexpr, body) ->
+    let fv_c = free_vars_cexpr cexpr in
+    let fv_b = free_vars_aexpr body in
+    IdentSet.union fv_c (IdentSet.remove id fv_b)
+  | ACExpr c -> free_vars_cexpr c
+
+and free_vars_cexpr cexpr =
+  match cexpr with
+  | CImmexpr imm -> free_vars_imm imm
+  (* | CBinop (_, ImmId l, ImmId r) -> IdentSet.of_list [l; r] *)
+  | CBinop (_, l, r) -> IdentSet.union (free_vars_imm l) (free_vars_imm r)
+  | CApp (ImmId f, args) ->
+    let fv_args =
+      List.fold_left
+        (fun acc arg ->
+           match arg with
+           | ImmId id -> IdentSet.add id acc
+           | _ -> acc)
+        IdentSet.empty
+        args
+    in
+    IdentSet.add f fv_args
+  | CApp (_, args) ->
+    List.fold_left
+      (fun acc arg ->
+         match arg with
+         | ImmId id -> IdentSet.add id acc
+         | _ -> acc)
+      IdentSet.empty
+      args
+  | CLam (param, body) ->
+    let fv_body = free_vars_aexpr body in
+    Format.printf
+      "Free vars in lambda (param=%s): %a@."
+      (show_ident param)
+      pp_identset
+      fv_body;
+    IdentSet.remove param fv_body
+  | CIte (cond, t, fopt) ->
+    let fv_cond = free_vars_cexpr cond in
+    let fv_t = free_vars_aexpr t in
+    let fv_f =
+      match fopt with
+      | Some e -> free_vars_aexpr e
+      | None -> IdentSet.empty
+    in
+    IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
+;;
+
+(* let is_lam = function  *)
+
+let rec lift_aexpr aexpr lifted_functions =
+  match aexpr with
+  (* | ALet (varname, CLam (id, ae), body) ->
+    let lifted_functions = (varname, CLam (id, ae)) :: lifted_functions in
+    Stdlib.Format.printf "CLam %a@. %a\n" pp_cexpr (CLam (id, ae)) pp_ident varname;
+    return (body, lifted_functions) *)
+  | ALet (varname, cexpr, body) ->
+    let* liftedc, lifted_functions2 = lift_cexpr cexpr lifted_functions in
+    let* liftedb, lifted_functions3 = lift_aexpr body lifted_functions2 in
+    (* Stdlib.Format.printf "ALet liftedc %a@.\n" pp_cexpr liftedc;
+    Stdlib.Format.printf "ALet liftedb %a@.\n" pp_aexpr liftedb; *)
+    return (ALet (varname, liftedc, liftedb), lifted_functions3)
+  (* | ACExpr (CLam (id, body)) ->
+    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
+    return (ACExpr (CLam (id, lifted)), lifted_functions) *)
+  | ACExpr cexpr ->
+    let* lifted, lifted_functions = lift_cexpr cexpr lifted_functions in
+    (* Stdlib.Format.printf "ACExpr lifted %a@.\n" pp_cexpr lifted; *)
+    return (ACExpr lifted, lifted_functions)
+
+and lift_cexpr cexpr lifted_functions =
+  match cexpr with
+  | CLam (id, body) ->
+    let* lifted, lifted_functions = lift_aexpr body lifted_functions in
+    return (CLam (id, lifted), lifted_functions)
+  | CIte (ccond, thn, Some els) ->
+    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
+    let* lifted_els, lifted_functions3 = lift_aexpr els lifted_functions2 in
+    return (CIte (ccond, lifted_thn, Some lifted_els), lifted_functions3)
+  | CIte (ccond, thn, None) ->
+    let* lifted_thn, lifted_functions2 = lift_aexpr thn lifted_functions in
+    return (CIte (ccond, lifted_thn, None), lifted_functions2)
+  | c -> return (c, lifted_functions)
+;;
+
+(* | CBinop of cbinop * immexpr * immexpr
+  | CIte of cexpr * aexpr * aexpr option (* if (42 > a) then 42 else a *)
+  | CImmexpr of immexpr
+  | CLam of ident * aexpr (* fun a -> a + 42 *)
+  | CApp of immexpr * immexpr list *)
+let lift_aconstruction ac lifted_functions =
+  match ac with
+  | AExpr ae ->
+    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
+    (* let _ = free_vars_aexpr ae in *)
+    return (AExpr ae', lifted_functions)
+  | AStatement (flag, [ (id, ae) ]) ->
+    let* ae', lifted_functions = lift_aexpr ae lifted_functions in
+    (* let _ = free_vars_aexpr ae in *)
+    return (AStatement (flag, [ id, ae' ]), lifted_functions)
+  | a -> return (a, lifted_functions)
 ;;
 
 let rec lift_aconstructions acs lifted_functions =
@@ -266,16 +365,108 @@ let rec lift_aconstructions acs lifted_functions =
 ;;
 
 let lift_program acs =
-  let lifted_functions = [] in
+  let lifted_functions = !pre_lifted_functions @ !pre_lifted_letins in
   (* reset global state *)
-  let* acs', lifted_functions = lift_aconstructions acs lifted_functions in
+  (* let* acs', lifted_functions = lift_aconstructions acs lifted_functions in *)
   let lifted_top_level =
     List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_functions
   in
-  return (lifted_top_level @ acs')
+  return (lifted_top_level @ acs)
 ;;
+
+(* let pp_identset fmt s =
+  Format.fprintf fmt "{";
+  IdentSet.iter (fun (Ident id) -> Format.fprintf fmt "%s; " id) s;
+  Format.fprintf fmt "}"
+;; *)
+
+module IdentMap = Map.Make(struct
+  type t = ident
+  let compare = compare
+end)
+
+let collect_freevars_map (lams : (ident * cexpr) list) : IdentSet.t IdentMap.t =
+  List.fold_left
+    (fun acc (id, expr) ->
+       let fv = free_vars_cexpr expr in
+       IdentMap.add id fv acc)
+    IdentMap.empty
+    lams
+
+let add_args (lams : (ident * cexpr) list) : (ident * cexpr) list =
+  List.map
+    (fun (id, expr) ->
+       let fv = free_vars_cexpr expr in
+       let fv_list = IdentSet.elements fv in
+       let wrapped =
+         List.fold_right (fun fv_id acc -> CLam (fv_id, ACExpr acc)) fv_list expr
+       in
+       id, wrapped)
+    lams
+;;
+let rec apply_lifted_args_aexpr env (ae : aexpr) : aexpr =
+  match ae with
+  | ALet (id, ce, body) ->
+      ALet (id, apply_lifted_args_cexpr env ce,
+                 apply_lifted_args_aexpr env body)
+  | ACExpr c ->
+      ACExpr (apply_lifted_args_cexpr env c)
+
+and apply_lifted_args_cexpr env (ce : cexpr) : cexpr =
+  match ce with
+  | CImmexpr (ImmId lam_id) when IdentMap.mem lam_id env ->
+      let fv = IdentSet.elements (IdentMap.find lam_id env) in
+      CApp (ImmId lam_id, List.map (fun v -> ImmId v) fv)
+
+  | CApp (ImmId f, args) ->
+      let new_args = List.map (apply_lifted_args_imm env) args in
+      CApp (ImmId f, new_args)
+
+  | CLam (id, body) ->
+      CLam (id, apply_lifted_args_aexpr env body)
+
+  | CIte (cond, thn, els) ->
+      CIte (apply_lifted_args_cexpr env cond,
+            apply_lifted_args_aexpr env thn,
+            Option.map (apply_lifted_args_aexpr env) els)
+
+  | CBinop (op, l, r) ->
+      CBinop (op, apply_lifted_args_imm env l, apply_lifted_args_imm env r)
+
+  | _ -> ce
+
+and apply_lifted_args_imm env = function
+  | ImmId id when IdentMap.mem id env ->
+      ImmId id
+  | imm -> imm
+
+let apply_lifted_args_aconstruction env = function
+  | AExpr ae ->
+      AExpr (apply_lifted_args_aexpr env ae)
+  | AStatement (flag, binds) ->
+      let binds' =
+        List.map (fun (id, ae) -> id, apply_lifted_args_aexpr env ae) binds
+      in
+      AStatement (flag, binds')
+
 
 let anf_and_lift_program ast =
   let* anf_program = anf_constructions ast in
-  lift_program anf_program
+  let fv_map = collect_freevars_map !pre_lifted_functions in
+  let wrapped = add_args !pre_lifted_functions in
+  let letins = 
+    List.map (fun (id, expr) -> id, apply_lifted_args_cexpr fv_map expr) !pre_lifted_letins in
+  let anf_program_with_apps =
+    List.map (apply_lifted_args_aconstruction fv_map) anf_program
+  in
+  pre_lifted_functions := wrapped;
+  pre_lifted_letins := letins;
+  List.iter
+    (fun (id, expr) ->
+       (* let fv = free_vars_cexpr expr in *)
+       Format.printf "wrapped %a@. %a\n" pp_cexpr expr pp_ident id)
+       (* Format.printf "Free vars in %s: %a@." (show_ident id) pp_identset fv) *)
+    wrapped;
+  (* pre_lifted_functions := add_args !pre_lifted_functions; *)
+  lift_program anf_program_with_apps
 ;;

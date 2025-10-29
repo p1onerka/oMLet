@@ -275,8 +275,7 @@ let find_lifted (id : ident) (lams : (ident * cexpr) list) : cexpr option =
 ;;
 
 (* ---------- collect free vars: from fun m -> k (m*n) we get {k, n} ---------- *)
-let rec free_vars_imm lams immexpr =
-  match immexpr with
+let rec free_vars_imm lams = function
   | ImmId id ->
     (match find_lifted id lams with
      | Some cexpr -> free_vars_cexpr lams cexpr
@@ -291,15 +290,13 @@ and free_vars_aexpr lams (expr : aexpr) : IdentSet.t =
     IdentSet.union fv_c (IdentSet.remove id fv_b)
   | ACExpr c -> free_vars_cexpr lams c
 
-and free_vars_cexpr lams cexpr =
-  match cexpr with
+and free_vars_cexpr lams = function
   | CImmexpr imm -> free_vars_imm lams imm
   | CBinop (_, l, r) -> IdentSet.union (free_vars_imm lams l) (free_vars_imm lams r)
   | CApp (ImmId f, args) ->
     let fv_args =
       List.fold_left
-        (fun acc arg ->
-           match arg with
+        (fun acc -> function
            | ImmId id -> IdentSet.add id acc
            | _ -> acc)
         IdentSet.empty
@@ -308,8 +305,7 @@ and free_vars_cexpr lams cexpr =
     IdentSet.add f fv_args
   | CApp (_, args) ->
     List.fold_left
-      (fun acc arg ->
-         match arg with
+      (fun acc -> function
          | ImmId id -> IdentSet.add id acc
          | _ -> acc)
       IdentSet.empty

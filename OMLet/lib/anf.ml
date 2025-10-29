@@ -87,22 +87,41 @@ let rec collect_app_args e =
   | _ -> e, []
 ;;
 
-let pre_lifted_functions = ref []
-let pre_lifted_letins = ref []
+type lifted_state =
+  { lifted_lams : (ident * cexpr) list
+  ; lifted_letins : (ident * cexpr) list
+  }
 
-let rec anf e expr_with_hole =
+let empty_lifted_state = { lifted_lams = []; lifted_letins = [] }
+
+(* let pp_lifted_state fmt (state : lifted_state) =
+  let pp_list fmt lst =
+    Format.fprintf fmt "[";
+    List.iter (fun (Ident id, _) -> Format.fprintf fmt "%s; " id) lst;
+    Format.fprintf fmt "]"
+  in
+  Format.fprintf
+    fmt
+    "{ lifted_lams = %a; lifted_letins = %a }"
+    pp_list
+    state.lifted_lams
+    pp_list
+    state.lifted_letins
+;; *)
+
+let rec anf (state : lifted_state) e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
     let* varname = gen_temp opname in
-    let* left_anf =
-      anf left (fun limm ->
-        let* right_anf =
-          anf right (fun rimm ->
-            let* inner = expr_with_hole (ImmId varname) in
-            return (ALet (varname, CBinop (op, limm, rimm), inner)))
+    let* left_anf, state1 =
+      anf state left (fun limm ->
+        let* right_anf, state2 =
+          anf state right (fun rimm ->
+            let* inner, state3 = expr_with_hole (ImmId varname) in
+            return (ALet (varname, CBinop (op, limm, rimm), inner), state3))
         in
-        return right_anf)
+        return (right_anf, state2))
     in
-    return left_anf
+    return (left_anf, state1)
   in
   match e with
   | Const (Int_lt n) -> expr_with_hole (ImmNum n)
@@ -111,12 +130,12 @@ let rec anf e expr_with_hole =
     let* opname, op_name = binop_map op in
     anf_binop opname op_name l r expr_with_hole
   | LetIn (_, Let_bind (PVar id, [], expr), [], body) ->
-    let* body_anf = anf body expr_with_hole in
-    anf expr (fun immval -> return (ALet (id, CImmexpr immval, body_anf)))
+    let* body_anf, state1 = anf state body expr_with_hole in
+    anf state1 expr (fun immval -> return (ALet (id, CImmexpr immval, body_anf), state1))
   | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
-    anf expr (fun _ -> anf body expr_with_hole)
+    anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
-    anf expr (fun _ -> anf body expr_with_hole)
+    anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right
@@ -128,7 +147,9 @@ let rec anf e expr_with_hole =
         args
         (return [])
     in
-    let* value = anf expr (fun imm -> return (ACExpr (CImmexpr imm))) in
+    let* value, state1 =
+      anf state expr (fun imm -> return (ACExpr (CImmexpr imm), state))
+    in
     let clams =
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
@@ -137,26 +158,27 @@ let rec anf e expr_with_hole =
       | ACExpr c -> return c
       | _ -> fail Unreachable
     in
-    let* body = anf body expr_with_hole in
-    pre_lifted_letins := (id, cclams) :: !pre_lifted_letins;
-    (* return (ALet (id, cclams, body)) *)
-    return body
+    let* body, state2 = anf state1 body expr_with_hole in
+    let state3 = { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] } in
+    return (body, state3)
   | If_then_else (cond, thn, Some els) ->
-    let* thn = anf thn expr_with_hole in
-    let* els = anf els expr_with_hole in
-    anf cond (fun condimm -> return (ACExpr (CIte (CImmexpr condimm, thn, Some els))))
+    let* thn, state1 = anf state thn expr_with_hole in
+    let* els, state2 = anf state1 els expr_with_hole in
+    anf state2 cond (fun condimm ->
+      return (ACExpr (CIte (CImmexpr condimm, thn, Some els)), state2))
   | Apply (f, args) ->
     let f, arg_exprs = collect_app_args (Apply (f, args)) in
-    anf f (fun fimm ->
-      let rec anf_args acc = function
+    anf state f (fun fimm ->
+      let rec anf_args acc st = function
         | [] ->
           let* varname = gen_temp "res_of_app" in
-          let* e = expr_with_hole (ImmId varname) in
-          return (ALet (varname, CApp (fimm, List.rev acc), e))
-        | expr :: rest -> anf expr (fun immval -> anf_args (immval :: acc) rest)
+          let* e, state1 = expr_with_hole (ImmId varname) in
+          return (ALet (varname, CApp (fimm, List.rev acc), e), state1)
+        | expr :: rest -> anf st expr (fun immval -> anf_args (immval :: acc) st rest)
       in
-      anf_args [] arg_exprs)
+      anf_args [] state arg_exprs)
   | Lambda (first, rest, body) ->
+    (* Format.printf "state %a@. \n" pp_lifted_state state; *)
     let* arg_names =
       List.fold_right
         (fun pat acc ->
@@ -168,10 +190,11 @@ let rec anf e expr_with_hole =
         (return [])
     in
     let* varname = gen_temp "lam" in
-    Stdlib.Format.printf "body ast %a@.\n" pp_expr body;
-    let* e = expr_with_hole (ImmId varname) in
-    let* body = anf body (fun imm -> return (ACExpr (CImmexpr imm))) in
-    Stdlib.Format.printf "body anf %a@.\n" pp_aexpr body;
+    let* e, state1 = expr_with_hole (ImmId varname) in
+    let state2 = { state1 with lifted_lams = state1.lifted_lams @ state.lifted_lams } in
+    let* body, state2 =
+      anf state2 body (fun imm -> return (ACExpr (CImmexpr imm), state2))
+    in
     let clams =
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names body
     in
@@ -180,25 +203,23 @@ let rec anf e expr_with_hole =
       | ACExpr c -> return c
       | _ -> fail Unreachable
     in
-    (* | ALet (varname, CLam (id, ae), body) ->
-    let lifted_functions = (varname, CLam (id, ae)) :: lifted_functions in
-    Stdlib.Format.printf "CLam %a@. %a\n" pp_cexpr (CLam (id, ae)) pp_ident varname;
-    return (body, lifted_functions) *)
     let* lifted_name = gen_temp "lifted_lam" in
-    (* pre_lifted_functions := (lifted_name, cclams) :: !pre_lifted_functions; *)
-    pre_lifted_functions := !pre_lifted_functions @ [ lifted_name, cclams ];
-    (* pre_lifted_functions := (varname, cclams) :: !pre_lifted_functions; *)
-    (* return e *)
-    return (ALet (varname, CImmexpr (ImmId lifted_name), e))
-  | e ->
-    Stdlib.Format.printf "%a@." pp_expr e;
+    let state3 =
+      { state2 with lifted_lams = state2.lifted_lams @ [ lifted_name, cclams ] }
+    in
+    (* Format.printf "state3 %a@. \n" pp_lifted_state state3; *)
+    return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)
+  | _ ->
+    (* Stdlib.Format.printf "%a@." pp_expr e; *)
     fail (Not_Yet_Implemented "ANF expr")
 ;;
 
-let anf_construction = function
+let anf_construction (state : lifted_state) = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
-    let* value = anf expr (fun immval -> return (ACExpr (CImmexpr immval))) in
-    return (AStatement (flag, [ id, value ]))
+    let* value, state1 =
+      anf state expr (fun immval -> return (ACExpr (CImmexpr immval), state))
+    in
+    return (AStatement (flag, [ id, value ]), state1)
   | Statement (Let (flag, Let_bind (PVar name, args, expr), [])) ->
     let* arg_names =
       List.fold_right
@@ -210,37 +231,42 @@ let anf_construction = function
         args
         (return [])
     in
-    let* value = anf expr (fun imm -> return (ACExpr (CImmexpr imm))) in
+    let* value, state1 =
+      anf state expr (fun imm -> return (ACExpr (CImmexpr imm), state))
+    in
     let clams =
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
-    return (AStatement (flag, [ name, clams ]))
+    return (AStatement (flag, [ name, clams ]), state1)
   | Expr e ->
-    let* inner = anf e (fun immval -> return (ACExpr (CImmexpr immval))) in
-    return (AExpr inner)
+    let* inner, state1 =
+      anf state e (fun immval -> return (ACExpr (CImmexpr immval), state))
+    in
+    return (AExpr inner, state1)
   | _ -> fail (Not_Yet_Implemented "ANF construction")
 ;;
 
-let rec anf_constructions = function
+let rec anf_constructions (state : lifted_state) = function
   | c :: rest ->
-    let* c_anf = anf_construction c in
-    let* rest_anf = anf_constructions rest in
-    return (c_anf :: rest_anf)
-  | [] -> return []
+    let* c_anf, state1 = anf_construction state c in
+    let* rest_anf, state2 = anf_constructions state1 rest in
+    return (c_anf :: rest_anf, state2)
+  | [] -> return ([], state)
 ;;
 
-(* CC and LL *)
+(* ---------- Closure conversion & Lambda lifting ---------- *)
+
 module IdentSet = Set.Make (struct
     type t = ident
 
     let compare = compare
   end)
 
-let pp_identset fmt s =
+(* let pp_identset fmt s =
   Format.fprintf fmt "{";
   IdentSet.iter (fun (Ident id) -> Format.fprintf fmt "%s; " id) s;
   Format.fprintf fmt "}"
-;;
+;; *)
 
 let find_lifted (id : ident) (lams : (ident * cexpr) list) : cexpr option =
   match List.find_opt (fun (lam_id, _) -> lam_id = id) lams with
@@ -248,27 +274,27 @@ let find_lifted (id : ident) (lams : (ident * cexpr) list) : cexpr option =
   | None -> None
 ;;
 
-(* collect free vars: from fun m -> k (m*n) we get {k, n} *)
-let rec free_vars_imm immexpr =
+(* ---------- collect free vars: from fun m -> k (m*n) we get {k, n} ---------- *)
+let rec free_vars_imm lams immexpr =
   match immexpr with
   | ImmId id ->
-    (match find_lifted id !pre_lifted_functions with
-     | Some cexpr -> free_vars_cexpr cexpr
+    (match find_lifted id lams with
+     | Some cexpr -> free_vars_cexpr lams cexpr
      | None -> IdentSet.singleton id)
   | ImmNum _ -> IdentSet.empty
 
-and free_vars_aexpr (expr : aexpr) : IdentSet.t =
+and free_vars_aexpr lams (expr : aexpr) : IdentSet.t =
   match expr with
   | ALet (id, cexpr, body) ->
-    let fv_c = free_vars_cexpr cexpr in
-    let fv_b = free_vars_aexpr body in
+    let fv_c = free_vars_cexpr lams cexpr in
+    let fv_b = free_vars_aexpr lams body in
     IdentSet.union fv_c (IdentSet.remove id fv_b)
-  | ACExpr c -> free_vars_cexpr c
+  | ACExpr c -> free_vars_cexpr lams c
 
-and free_vars_cexpr cexpr =
+and free_vars_cexpr lams cexpr =
   match cexpr with
-  | CImmexpr imm -> free_vars_imm imm
-  | CBinop (_, l, r) -> IdentSet.union (free_vars_imm l) (free_vars_imm r)
+  | CImmexpr imm -> free_vars_imm lams imm
+  | CBinop (_, l, r) -> IdentSet.union (free_vars_imm lams l) (free_vars_imm lams r)
   | CApp (ImmId f, args) ->
     let fv_args =
       List.fold_left
@@ -289,19 +315,19 @@ and free_vars_cexpr cexpr =
       IdentSet.empty
       args
   | CLam (param, body) ->
-    let fv_body = free_vars_aexpr body in
-    Format.printf
+    let fv_body = free_vars_aexpr lams body in
+    (* Format.printf
       "Free vars in lambda (param=%s): %a@."
       (show_ident param)
       pp_identset
-      fv_body;
+      fv_body; *)
     IdentSet.remove param fv_body
   | CIte (cond, t, fopt) ->
-    let fv_cond = free_vars_cexpr cond in
-    let fv_t = free_vars_aexpr t in
+    let fv_cond = free_vars_cexpr lams cond in
+    let fv_t = free_vars_aexpr lams t in
     let fv_f =
       match fopt with
-      | Some e -> free_vars_aexpr e
+      | Some e -> free_vars_aexpr lams e
       | None -> IdentSet.empty
     in
     IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
@@ -316,17 +342,17 @@ module IdentMap = Map.Make (struct
 let collect_freevars_map (lams : (ident * cexpr) list) : IdentSet.t IdentMap.t =
   List.fold_left
     (fun acc (id, expr) ->
-       let fv = free_vars_cexpr expr in
+       let fv = free_vars_cexpr lams expr in
        IdentMap.add id fv acc)
     IdentMap.empty
     lams
 ;;
 
-(* add free vars: from fun m -> k (m*n) to fun k n m -> k (m*n) *)
+(* ---------- add free vars: from fun m -> k (m*n) to fun k n m -> k (m*n) ---------- *)
 let add_free_args_lam (lams : (ident * cexpr) list) : (ident * cexpr) list =
   List.map
     (fun (id, expr) ->
-       let fv = free_vars_cexpr expr in
+       let fv = free_vars_cexpr lams expr in
        let fv_list = IdentSet.elements fv in
        let wrapped =
          List.fold_right (fun fv_id acc -> CLam (fv_id, ACExpr acc)) fv_list expr
@@ -335,7 +361,7 @@ let add_free_args_lam (lams : (ident * cexpr) list) : (ident * cexpr) list =
     lams
 ;;
 
-(* apply args: from fun k n m -> k (m*n) to (fun k n m -> k (m*n)) k n *)
+(* ---------- apply args: from fun k n m -> k (m*n) to (fun k n m -> k (m*n)) k n ---------- *)
 let rec apply_lifted_args_aexpr env (ae : aexpr) : aexpr =
   match ae with
   | ALet (id, ce, body) ->
@@ -365,38 +391,31 @@ let apply_lifted_args_aconstruction env = function
     AStatement (flag, binds')
 ;;
 
-(* lift lambdas *)
-let lift_program acs =
-  let lifted_functions = !pre_lifted_functions @ !pre_lifted_letins in
+(* ---------- lift lambdas ---------- *)
+let lift_program (state : lifted_state) acs =
+  let lifted_lams = state.lifted_lams @ state.lifted_letins in
   let lifted_top_level =
-    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_functions
+    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_lams
   in
   return (lifted_top_level @ acs)
 ;;
 
 let anf_and_lift_program ast =
-  let* anf_program = anf_constructions ast in
-  let fv_map = collect_freevars_map !pre_lifted_functions in
+  let* anf_program, final_state = anf_constructions empty_lifted_state ast in
+  (* Format.printf "final state %a@. \n" pp_lifted_state final_state; *)
+  let fv_map = collect_freevars_map final_state.lifted_lams in
+  let wrapped = add_free_args_lam final_state.lifted_lams in
+  let lams =
+    List.map (fun (id, expr) -> id, apply_lifted_args_cexpr fv_map expr) wrapped
+  in
   let letins =
     List.map
       (fun (id, expr) -> id, apply_lifted_args_cexpr fv_map expr)
-      !pre_lifted_letins
-  in
-  let wrapped = add_free_args_lam !pre_lifted_functions in
-  let lams =
-    List.map (fun (id, expr) -> id, apply_lifted_args_cexpr fv_map expr) wrapped
+      final_state.lifted_letins
   in
   let anf_program_with_apps =
     List.map (apply_lifted_args_aconstruction fv_map) anf_program
   in
-  pre_lifted_functions := lams;
-  pre_lifted_letins := letins;
-  (* List.iter
-    (fun (id, expr) ->
-       let fv = free_vars_cexpr expr in
-       (* Format.printf "wrapped %a@. %a\n" pp_cexpr expr pp_ident id) *)
-       Format.printf "Free vars in %s: %a@." (show_ident id) pp_identset fv)
-    wrapped; *)
-  (* pre_lifted_functions := add_free_args_lam !pre_lifted_functions; *)
-  lift_program anf_program_with_apps
+  let final_state' = { lifted_lams = lams; lifted_letins = letins } in
+  lift_program final_state' anf_program_with_apps
 ;;

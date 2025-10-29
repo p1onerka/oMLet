@@ -60,7 +60,7 @@ and pp_astatement fmt (is_rec, bindings) =
   in
   fprintf
     fmt
-    "@[<v 0>%s %a@]"
+    "@[<v 0>%s %a@]\n"
     keyword
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ and ") pp_binding)
     bindings

@@ -1,0 +1,7 @@
+(cram
+ (applies_to fib_cc_ll_test)
+ (deps
+  ../../../repl/repl.exe
+  ../../../lib/runtime.c
+  ../build_and_run.sh
+  ../../manytests/typed/012fibcps.ml))

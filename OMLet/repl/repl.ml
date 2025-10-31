@@ -42,7 +42,7 @@ let run_single dump_parsetree dump_anf stop_after eval input_source =
       print_endline (show_constructions ast);
       ())
     else (
-      match run (anf_constructions ast) 0 with
+      match run (anf_and_lift_program ast) 0 with
       | Result.Error e -> Stdlib.Format.printf "%a@." pp_anf_error e
       | Result.Ok (anf, _) ->
         if dump_anf

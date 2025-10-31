@@ -4,6 +4,7 @@
 
 open Ast
 open Anf
+open TreeAnalysis
 open CodegenTypes
 module InfoMap = Map.Make (String)
 (* module RegStackMap = Map.Make (Int) *)
@@ -133,15 +134,6 @@ let make_label name =
   let new_state = { state with label_factory = new_label_factory } in
   let* () = write new_state in
   return label
-;;
-
-let rec lambda_arity_of_aexpr ae =
-  match ae with
-  | ACExpr (CLam (_, inner)) ->
-    let sub_arity, body = lambda_arity_of_aexpr inner in
-    1 + sub_arity, body
-  | ACExpr _ -> 0, ae
-  | ALet _ -> 0, ae
 ;;
 
 let add_instr instr =
@@ -353,13 +345,9 @@ and codegen_aexpr = function
     update_free_regs old_free_regs
 ;;
 
-let is_function = function
-  | ACExpr (CLam (Ident _, _)) -> true
-  | _ -> false
-;;
-
 let codegen_astatement astmt =
   let* state = read in
+  let required_stack_size = analyze_astatement 0 astmt * 8 in
   match astmt with
   | Ident name, st when is_function st ->
     let* func_label = make_label name in
@@ -367,8 +355,7 @@ let codegen_astatement astmt =
     let* () = add_instr (True (Label func_label)) in
     let new_info = InfoMap.add name (Func (func_label, arity)) state.info in
     let* () = update_info new_info in
-    let required_stack = 64 in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
     let* () = add_instr (True (StackType (SD, Ra, Stack 0))) in
     let fresh_stack = 8 in
     let* () = update_stack fresh_stack in
@@ -378,7 +365,7 @@ let codegen_astatement astmt =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     let* () = add_instr (True (StackType (LD, Ra, Stack 0))) in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack_size))) in
     add_instr (Pseudo RET)
     (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
   | Ident _, st ->
@@ -388,7 +375,7 @@ let codegen_astatement astmt =
       else
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
-        let* () = add_instr (True (IType (ADDI, Sp, Sp, -64))) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
         return true
     in
     let* () = update_stack 0 in
@@ -398,11 +385,14 @@ let codegen_astatement astmt =
     let* () = codegen_aexpr st in
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
-    if is_global then add_instr (True (IType (ADDI, Sp, Sp, 64))) else return ()
+    if is_global
+    then add_instr (True (IType (ADDI, Sp, Sp, required_stack_size)))
+    else return ()
 ;;
 
 let codegen_aconstruction aconstr =
   let* state = read in
+  let required_stack_size = analyze_aconstr 0 aconstr * 8 in
   match aconstr with
   | AExpr ae ->
     let* is_global =
@@ -411,7 +401,7 @@ let codegen_aconstruction aconstr =
       else
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
-        let* () = add_instr (True (IType (ADDI, Sp, Sp, -64))) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
         return true
     in
     let old_a_regs = state.a_regs in
@@ -419,7 +409,9 @@ let codegen_aconstruction aconstr =
     let* () = codegen_aexpr ae in
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
-    if is_global then add_instr (True (IType (ADDI, Sp, Sp, 64))) else return ()
+    if is_global
+    then add_instr (True (IType (ADDI, Sp, Sp, required_stack_size)))
+    else return ()
   | AStatement (_, st_list) ->
     List.fold_left (fun _ -> codegen_astatement) (return ()) st_list
 ;;

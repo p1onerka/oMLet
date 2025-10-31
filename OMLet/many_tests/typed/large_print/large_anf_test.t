@@ -10,6 +10,7 @@ SPDX-License-Identifier: LGPL-3.0-or-later
                res_of_app_0
         else let res_of_app_1 = print_int 1 in
                res_of_app_1
+  
   let main =
   let eq_7 = 0 = 1 in
     if eq_7
@@ -51,3 +52,4 @@ SPDX-License-Identifier: LGPL-3.0-or-later
                             else let x = 1 in
                                    let res_of_app_3 = large x in
                                      res_of_app_3
+  

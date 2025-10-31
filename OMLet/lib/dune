@@ -12,7 +12,8 @@
   TypedTree
   Codegen
   CodegenTypes
-  ResultCounter)
+  ResultCounter
+  TreeAnalysis)
  (libraries base angstrom qcheck-core qcheck-core.runner)
  (instrumentation
   (backend bisect_ppx))

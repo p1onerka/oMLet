@@ -159,7 +159,12 @@ let rec anf (state : lifted_state) e expr_with_hole =
       | _ -> fail Unreachable
     in
     let* body, state2 = anf state1 body expr_with_hole in
-    let state3 = { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] } in
+    let state3 =
+      if List.mem (id, cclams) state2.lifted_letins
+      then state2
+      else { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] }
+    in
+    (* let state3 = { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] } in *)
     return (body, state3)
   | If_then_else (cond, thn, Some els) ->
     let* thn, state1 = anf state thn expr_with_hole in
@@ -190,7 +195,17 @@ let rec anf (state : lifted_state) e expr_with_hole =
     in
     let* varname = gen_temp "lam" in
     let* e, state1 = expr_with_hole (ImmId varname) in
-    let state2 = { state1 with lifted_lams = state1.lifted_lams @ state.lifted_lams } in
+    let pair_exists lst (id, ce) =
+      List.exists (fun (id', ce') -> id = id' && ce = ce') lst
+    in
+    let merge_unique_pairs lst1 lst2 =
+      lst2
+      |> List.fold_left
+           (fun acc pair -> if pair_exists lst1 pair then acc else pair :: acc)
+           lst1
+    in
+    let lifted_lams = merge_unique_pairs state1.lifted_lams state.lifted_lams in
+    let state2 = { state1 with lifted_lams } in
     let* body, state2 =
       anf state2 body (fun imm -> return (ACExpr (CImmexpr imm), state2))
     in
@@ -204,7 +219,9 @@ let rec anf (state : lifted_state) e expr_with_hole =
     in
     let* lifted_name = gen_temp "lifted_lam" in
     let state3 =
-      { state2 with lifted_lams = state2.lifted_lams @ [ lifted_name, cclams ] }
+      if List.mem (lifted_name, cclams) state2.lifted_lams
+      then state2
+      else { state2 with lifted_lams = state2.lifted_lams @ [ lifted_name, cclams ] }
     in
     (* Format.printf "state3 %a@. \n" pp_lifted_state state3; *)
     return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)

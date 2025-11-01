@@ -178,7 +178,6 @@ let rec anf (state : lifted_state) e expr_with_hole =
       in
       anf_args [] state arg_exprs)
   | Lambda (first, rest, body) ->
-    (* Format.printf "state %a@. \n" pp_lifted_state state; *)
     let* arg_names =
       List.fold_right
         (fun pat acc ->
@@ -214,12 +213,45 @@ let rec anf (state : lifted_state) e expr_with_hole =
     fail (Not_Yet_Implemented "ANF expr")
 ;;
 
+let is_function = function
+  | ImmId (Ident name) -> Some name
+  | _ -> None
+;;
+
+let rec refine_applications (state : lifted_state) (ae : aexpr) =
+  match ae with
+  | ALet (id, CApp (f, args), body) ->
+    (match args with
+     | inner_func :: inner_args ->
+       let* body', state' = refine_applications state body in
+       (match is_function inner_func, inner_args with
+        | Some _, [] -> return (ALet (id, CApp (f, args), body'), state')
+        | Some name, _ ->
+          let* inner = gen_temp "res_of_inner" in
+          let new_let =
+            ALet
+              ( inner
+              , CApp (ImmId (Ident name), inner_args)
+              , ALet (id, CApp (f, [ ImmId inner ]), body') )
+          in
+          return (new_let, state')
+        | None, _ -> return (ALet (id, CApp (f, args), body'), state'))
+     | [] ->
+       let* body', state' = refine_applications state body in
+       return (ALet (id, CApp (f, []), body'), state'))
+  | ALet (id, ce, body) ->
+    let* body', state' = refine_applications state body in
+    return (ALet (id, ce, body'), state')
+  | _ -> return (ae, state)
+;;
+
 let anf_construction (state : lifted_state) = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
     let* value, state1 =
       anf state expr (fun immval -> return (ACExpr (CImmexpr immval), state))
     in
-    return (AStatement (flag, [ id, value ]), state1)
+    let* value1, state2 = refine_applications state1 value in
+    return (AStatement (flag, [ id, value1 ]), state2)
   | Statement (Let (flag, Let_bind (PVar name, args, expr), [])) ->
     let* arg_names =
       List.fold_right
@@ -234,10 +266,11 @@ let anf_construction (state : lifted_state) = function
     let* value, state1 =
       anf state expr (fun imm -> return (ACExpr (CImmexpr imm), state))
     in
+    let* value1, state2 = refine_applications state1 value in
     let clams =
-      List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
+      List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value1
     in
-    return (AStatement (flag, [ name, clams ]), state1)
+    return (AStatement (flag, [ name, clams ]), state2)
   | Expr e ->
     let* inner, state1 =
       anf state e (fun immval -> return (ACExpr (CImmexpr immval), state))

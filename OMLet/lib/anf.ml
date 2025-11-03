@@ -87,14 +87,21 @@ let rec collect_app_args e =
   | _ -> e, []
 ;;
 
-type lifted_state =
+module FuncSet = Set.Make (struct
+    type t = ident
+
+    let compare = compare
+  end)
+
+type state =
   { lifted_lams : (ident * cexpr) list
   ; lifted_letins : (ident * cexpr) list
+  ; functions : FuncSet.t
   }
 
-let empty_lifted_state = { lifted_lams = []; lifted_letins = [] }
+let empty_state = { lifted_lams = []; lifted_letins = []; functions = FuncSet.empty }
 
-(* let pp_lifted_state fmt (state : lifted_state) =
+(* let pp_state fmt (state : state) =
   let pp_list fmt lst =
     Format.fprintf fmt "[";
     List.iter (fun (Ident id, _) -> Format.fprintf fmt "%s; " id) lst;
@@ -109,7 +116,7 @@ let empty_lifted_state = { lifted_lams = []; lifted_letins = [] }
     state.lifted_letins
 ;; *)
 
-let rec anf (state : lifted_state) e expr_with_hole =
+let rec anf (state : state) e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
     let* varname = gen_temp opname in
     let* left_anf, state1 =
@@ -162,9 +169,12 @@ let rec anf (state : lifted_state) e expr_with_hole =
     let state3 =
       if List.mem (id, cclams) state2.lifted_letins
       then state2
-      else { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] }
+      else
+        { state2 with
+          lifted_letins = state2.lifted_letins @ [ id, cclams ]
+        ; functions = FuncSet.add id state2.functions
+        }
     in
-    (* let state3 = { state2 with lifted_letins = state2.lifted_letins @ [ id, cclams ] } in *)
     return (body, state3)
   | If_then_else (cond, thn, Some els) ->
     let* thn, state1 = anf state thn expr_with_hole in
@@ -221,54 +231,25 @@ let rec anf (state : lifted_state) e expr_with_hole =
     let state3 =
       if List.mem (lifted_name, cclams) state2.lifted_lams
       then state2
-      else { state2 with lifted_lams = state2.lifted_lams @ [ lifted_name, cclams ] }
+      else
+        { state2 with
+          lifted_lams = state2.lifted_lams @ [ lifted_name, cclams ]
+        ; functions = FuncSet.add lifted_name state2.functions
+        }
     in
-    (* Format.printf "state3 %a@. \n" pp_lifted_state state3; *)
+    (* Format.printf "state3 %a@. \n" pp_state state3; *)
     return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)
   | _ ->
     (* Stdlib.Format.printf "%a@." pp_expr e; *)
     fail (Not_Yet_Implemented "ANF expr")
 ;;
 
-let is_function = function
-  | ImmId (Ident name) -> Some name
-  | _ -> None
-;;
-
-let rec refine_applications (state : lifted_state) (ae : aexpr) =
-  match ae with
-  | ALet (id, CApp (f, args), body) ->
-    (match args with
-     | inner_func :: inner_args ->
-       let* body', state' = refine_applications state body in
-       (match is_function inner_func, inner_args with
-        | Some _, [] -> return (ALet (id, CApp (f, args), body'), state')
-        | Some name, _ ->
-          let* inner = gen_temp "res_of_inner" in
-          let new_let =
-            ALet
-              ( inner
-              , CApp (ImmId (Ident name), inner_args)
-              , ALet (id, CApp (f, [ ImmId inner ]), body') )
-          in
-          return (new_let, state')
-        | None, _ -> return (ALet (id, CApp (f, args), body'), state'))
-     | [] ->
-       let* body', state' = refine_applications state body in
-       return (ALet (id, CApp (f, []), body'), state'))
-  | ALet (id, ce, body) ->
-    let* body', state' = refine_applications state body in
-    return (ALet (id, ce, body'), state')
-  | _ -> return (ae, state)
-;;
-
-let anf_construction (state : lifted_state) = function
+let anf_construction (state : state) = function
   | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
     let* value, state1 =
       anf state expr (fun immval -> return (ACExpr (CImmexpr immval), state))
     in
-    let* value1, state2 = refine_applications state1 value in
-    return (AStatement (flag, [ id, value1 ]), state2)
+    return (AStatement (flag, [ id, value ]), state1)
   | Statement (Let (flag, Let_bind (PVar name, args, expr), [])) ->
     let* arg_names =
       List.fold_right
@@ -283,10 +264,10 @@ let anf_construction (state : lifted_state) = function
     let* value, state1 =
       anf state expr (fun imm -> return (ACExpr (CImmexpr imm), state))
     in
-    let* value1, state2 = refine_applications state1 value in
     let clams =
-      List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value1
+      List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
+    let state2 = { state1 with functions = FuncSet.add name state1.functions } in
     return (AStatement (flag, [ name, clams ]), state2)
   | Expr e ->
     let* inner, state1 =
@@ -296,9 +277,55 @@ let anf_construction (state : lifted_state) = function
   | _ -> fail (Not_Yet_Implemented "ANF construction")
 ;;
 
-let rec anf_constructions (state : lifted_state) = function
+(*
+   let name = func1 func2 args... in ...
+   should become 
+   let name1 = func2 args in 
+   let name2 = func1 name1 in ...
+*)
+
+let rec refine_applications (state : state) (ae : aexpr) =
+  match ae with
+  | ALet (id, CApp (f, args), body) ->
+    let* body', state' = refine_applications state body in
+    (match args with
+     | [] -> return (ALet (id, CApp (f, []), body'), state')
+     | inner_func :: inner_args ->
+       (match inner_func, inner_args with
+        | ImmId name, _ ->
+          (match FuncSet.find_opt name state.functions with
+           | Some func ->
+             let* inner = gen_temp "res_of_inner" in
+             let new_let =
+               ALet
+                 ( inner
+                 , CApp (ImmId func, inner_args)
+                 , ALet (id, CApp (f, [ ImmId inner ]), body') )
+             in
+             let* new_new_let, state'' = refine_applications state' new_let in
+             return (new_new_let, state'')
+           | None -> return (ALet (id, CApp (f, args), body'), state'))
+        | _, _ -> return (ALet (id, CApp (f, args), body'), state')))
+  | ALet (id, ce, body) ->
+    let* body', state' = refine_applications state body in
+    return (ALet (id, ce, body'), state')
+  | _ -> return (ae, state)
+;;
+
+let refine_applications_aconstr = function
+  | AStatement (flag, [ (name, ae) ]), state ->
+    let* ae', state' = refine_applications state ae in
+    return (AStatement (flag, [ name, ae' ]), state')
+  | AExpr ae, state ->
+    let* ae', state' = refine_applications state ae in
+    return (AExpr ae', state')
+  | _ -> fail (Not_Yet_Implemented "ANF construction")
+;;
+
+let rec anf_constructions (state : state) = function
   | c :: rest ->
     let* c_anf, state1 = anf_construction state c in
+    let* c_anf, state1 = refine_applications_aconstr (c_anf, state1) in
     let* rest_anf, state2 = anf_constructions state1 rest in
     return (c_anf :: rest_anf, state2)
   | [] -> return ([], state)
@@ -438,7 +465,7 @@ let apply_lifted_args_aconstruction env = function
 ;;
 
 (* ---------- lift lambdas ---------- *)
-let lift_program (state : lifted_state) acs =
+let lift_program (state : state) acs =
   let lifted_lams = state.lifted_lams @ state.lifted_letins in
   let lifted_top_level =
     List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_lams
@@ -447,8 +474,8 @@ let lift_program (state : lifted_state) acs =
 ;;
 
 let anf_and_lift_program ast =
-  let* anf_program, final_state = anf_constructions empty_lifted_state ast in
-  (* Format.printf "final state %a@. \n" pp_lifted_state final_state; *)
+  let* anf_program, final_state = anf_constructions empty_state ast in
+  (* Format.printf "final state %a@. \n" pp_state final_state; *)
   let fv_map = collect_freevars_map final_state.lifted_lams in
   let wrapped = add_free_args_lam final_state.lifted_lams in
   let lams =
@@ -462,6 +489,6 @@ let anf_and_lift_program ast =
   let anf_program_with_apps =
     List.map (apply_lifted_args_aconstruction fv_map) anf_program
   in
-  let final_state' = { lifted_lams = lams; lifted_letins = letins } in
+  let final_state' = { final_state with lifted_lams = lams; lifted_letins = letins } in
   lift_program final_state' anf_program_with_apps
 ;;

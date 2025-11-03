@@ -41,19 +41,9 @@ type anf_error =
   | Unreachable
   | Not_Yet_Implemented of string
 
-type lifted_state =
-  { lifted_lams : (ident * cexpr) list
-  ; lifted_letins : (ident * cexpr) list
-  }
-
 open ResultCounter
 
 val gen_temp : string -> (ident, 'a) ResultCounterMonad.t
-
-val anf_constructions
-  :  lifted_state
-  -> construction list
-  -> (aconstruction list * lifted_state, anf_error) ResultCounterMonad.t
 
 val anf_and_lift_program
   :  construction list

@@ -16,6 +16,7 @@ type state =
   ; a_regs : reg list
   ; free_regs : reg list
   ; stack : int
+  ; frame : int
   ; info : meta_info InfoMap.t
   ; compiled : instr list
   }
@@ -66,14 +67,15 @@ let init_state =
   let is_start_label_put = false in
   let a_regs = clear_a_regs in
   let t_regs = List.init 7 (fun i -> Temp i) in
-  let s_regs = List.init 12 (fun i -> Saved i) in
+  let s_regs = List.init 11 (fun i -> Saved i) in
   let free_regs = t_regs @ s_regs in
   (* a_regs are used as a "bridge" to new values, so it is unstable to use them for storing *)
   let stack = 0 in
+  let frame = 0 in
   let info = InfoMap.empty in
   let info = InfoMap.add "print_int" (Func ("print_int", 1)) info in
   let compiled = [] in
-  { label_factory; is_start_label_put; a_regs; free_regs; stack; info; compiled }
+  { label_factory; is_start_label_put; a_regs; free_regs; stack; frame; info; compiled }
 ;;
 
 let start_label = "_start"
@@ -102,6 +104,12 @@ let update_stack new_stack =
   write new_state
 ;;
 
+let update_frame new_frame =
+  let* state = read in
+  let new_state = { state with frame = new_frame } in
+  write new_state
+;;
+
 let update_is_start_label_put new_value =
   let* state = read in
   let new_state = { state with is_start_label_put = new_value } in
@@ -114,6 +122,13 @@ let extend_stack size =
   let curr_stack = state.stack in
   let* () = update_stack (curr_stack + size) in
   return curr_stack
+;;
+
+let extend_frame size =
+  let* state = read in
+  let curr_frame = state.frame in
+  let* () = update_frame (curr_frame + size) in
+  return curr_frame
 ;;
 
 (* info will probably be used later, when there is logic for pushing something into stack *)
@@ -150,12 +165,15 @@ let codegen_immexpr immexpr =
   | ImmId (Ident name) ->
     (match InfoMap.find_opt name state.info with
      | None -> fail "Panic: undefined var in codegen!"
-     | Some (Var o) ->
-       add_instr (True (StackType (LD, a_regs_hd, Stack o)))
+     | Some (Var (o, is_arg)) ->
+       let reg = if state.frame > 0 then Fp else Sp in
+       let o = if state.frame > 0 && o <> 0 && not is_arg then -16 - o else o in
+       add_instr (True (StackType (LD, a_regs_hd, Stack (o, reg))))
        (* change back to Arg 0 here? *)
      | Some (Func (l, arity)) ->
        (* for function identifier: create a closure via runtime *)
        (* load the function label address into a0, put arity into a1 *)
+       let* () = add_instr (Pseudo (MV (Saved 11, Arg 0))) in
        let* () = add_instr (Pseudo (LA (Arg 0, l))) in
        let* () = add_instr (Pseudo (LI (Arg 1, arity))) in
        add_instr (Pseudo (CALL "alloc_closure"))
@@ -244,11 +262,10 @@ let rec codegen_cexpr cexpr =
        let* () = add_instr (Pseudo (J label_join)) in
        add_instr (True (Label label_join)))
   | CLam (Ident name, ae) ->
-    let* arg_reg = find_argument in
-    let* cur_offset = extend_stack 8 in
-    let new_info = InfoMap.add name (Var cur_offset) state.info in
+    let* _ = extend_stack 8 in
+    let* cur_offset = extend_frame 8 in
+    let new_info = InfoMap.add name (Var (cur_offset, true)) state.info in
     let* () = update_info new_info in
-    let* () = add_instr (True (StackType (SD, arg_reg, Stack cur_offset))) in
     let* state = read in
     let new_a_regs =
       match ae with
@@ -261,6 +278,7 @@ let rec codegen_cexpr cexpr =
     codegen_aexpr ae
   (* TODO: technically, name can be digit. do something about it? *)
   | CApp (func, args) ->
+    let* () = add_instr (Pseudo (MV (Arg 0, Saved 11))) in
     (* find all t* registers that should be stored *)
     let used_temps =
       InfoMap.bindings state.info
@@ -275,7 +293,7 @@ let rec codegen_cexpr cexpr =
         (fun acc (name, reg) ->
            let* saved = acc in
            let* cur_offset = extend_stack 8 in
-           let* () = add_instr (True (StackType (SD, reg, Stack cur_offset))) in
+           let* () = add_instr (True (StackType (SD, reg, Stack (cur_offset, Sp)))) in
            return ((name, (reg, cur_offset)) :: saved))
         (return [])
         used_temps
@@ -292,7 +310,7 @@ let rec codegen_cexpr cexpr =
            let* () = update_a_regs old_a_regs in
            (* store args on stack so we can pass the pointer to them and apply via runtime *)
            let* () =
-             add_instr (True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8)))))
+             add_instr (True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8), Sp))))
            in
            return ())
         (return ())
@@ -312,7 +330,7 @@ let rec codegen_cexpr cexpr =
       List.fold_left
         (fun acc (_, (reg, offset)) ->
            let* () = acc in
-           let* () = add_instr (True (StackType (LD, reg, Stack offset))) in
+           let* () = add_instr (True (StackType (LD, reg, Stack (offset, Fp)))) in
            let* _ = extend_stack (-8) in
            return ())
         (return ())
@@ -335,11 +353,15 @@ and codegen_aexpr = function
     let* () = codegen_cexpr cexpr in
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
-    let* cur_offset = extend_stack 8 in
+    let* _ = extend_stack 8 in
+    let* cur_offset = extend_frame 8 in
     let* state = read in
-    let new_info = InfoMap.add name (Var cur_offset) state.info in
+    let new_info = InfoMap.add name (Var (cur_offset, false)) state.info in
     let* () = update_info new_info in
-    let* () = add_instr (True (StackType (SD, List.hd state.a_regs, Stack cur_offset))) in
+    let cur_offset = if cur_offset <> 0 then -16 - cur_offset else cur_offset in
+    let* () =
+      add_instr (True (StackType (SD, List.hd state.a_regs, Stack (cur_offset, Fp))))
+    in
     let* () = codegen_aexpr body in
     let* () = update_a_regs old_a_regs in
     update_free_regs old_free_regs
@@ -356,15 +378,30 @@ let codegen_astatement astmt =
     let new_info = InfoMap.add name (Func (func_label, arity)) state.info in
     let* () = update_info new_info in
     let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
-    let* () = add_instr (True (StackType (SD, Ra, Stack 0))) in
-    let fresh_stack = 8 in
+    let* () =
+      add_instr (True (StackType (SD, Ra, Stack (required_stack_size - 8, Sp))))
+    in
+    let* () =
+      add_instr (True (StackType (SD, Fp, Stack (required_stack_size - 16, Sp))))
+    in
+    let* () = add_instr (True (IType (ADDI, Fp, Sp, required_stack_size))) in
+    let fresh_stack = -8 in
+    let fresh_frame = 0 in
     let* () = update_stack fresh_stack in
+    let* () = update_frame fresh_frame in
     let old_a_regs = state.a_regs in
     let old_free_regs = state.free_regs in
     let* () = codegen_aexpr st in
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
-    let* () = add_instr (True (StackType (LD, Ra, Stack 0))) in
+    let* () = update_frame fresh_frame in
+    let* () = add_instr (Pseudo (MV (Saved 11, Arg 0))) in
+    let* () =
+      add_instr (True (StackType (LD, Ra, Stack (required_stack_size - 8, Sp))))
+    in
+    let* () =
+      add_instr (True (StackType (LD, Fp, Stack (required_stack_size - 16, Sp))))
+    in
     let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack_size))) in
     add_instr (Pseudo RET)
     (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
@@ -375,7 +412,9 @@ let codegen_astatement astmt =
       else
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
+        let* () = add_instr (Pseudo (MV (Fp, Sp))) in
         let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
+        let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
         return true
     in
     let* () = update_stack 0 in
@@ -401,7 +440,9 @@ let codegen_aconstruction aconstr =
       else
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
+        let* () = add_instr (Pseudo (MV (Fp, Sp))) in
         let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
+        let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
         return true
     in
     let old_a_regs = state.a_regs in

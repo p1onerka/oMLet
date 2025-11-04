@@ -4,6 +4,7 @@
   ../../../repl/repl.exe
   fib_print.ml
   ../../../lib/runtime.c
+  ../../../lib/callf.s
   ../build_and_run.sh))
 
 (cram

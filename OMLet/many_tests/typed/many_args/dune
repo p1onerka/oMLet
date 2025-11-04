@@ -1,8 +1,8 @@
 (cram
- (applies_to fac_cc_ll_test)
+ (applies_to many_args_test)
  (deps
   ../../../repl/repl.exe
   ../../../lib/runtime.c
   ../../../lib/callf.s
   ../build_and_run.sh
-  ../../manytests/typed/012faccps.ml))
+  ../../manytests/typed/004manyargs.ml))

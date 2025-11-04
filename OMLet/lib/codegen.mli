@@ -11,6 +11,7 @@ type state =
   ; a_regs : CodegenTypes.reg list
   ; free_regs : CodegenTypes.reg list
   ; stack : int
+  ; frame : int
   ; info : CodegenTypes.meta_info InfoMap.t
   ; compiled : CodegenTypes.instr list
   }

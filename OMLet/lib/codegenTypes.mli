@@ -14,8 +14,12 @@ type reg =
   | Saved of int
   | Arg of int
 
+type variable_type =
+  | Argument
+  | Local
+
 type meta_info =
-  | Var of int * bool
+  | Var of int * variable_type
   | Func of string * int
   | Value of reg
 

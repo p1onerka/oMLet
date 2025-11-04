@@ -14,11 +14,14 @@ type reg =
   | Saved of int
   | Arg of int
 
+type variable_type =
+  | Argument
+  | Local
+
 (* for mapping names with the way they can be reached *)
 type meta_info =
-  | Var of
-      int
-      * bool (* represents stack offset of a variable, and bool if it is an argument *)
+  | Var of int * variable_type
+    (* represents stack offset of a variable, and bool if it is an argument *)
   | Func of string * int (* represents label and arity of a function *)
   | Value of reg (* represents value in a register *)
 

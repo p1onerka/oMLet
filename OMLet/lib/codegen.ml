@@ -165,9 +165,23 @@ let codegen_immexpr immexpr =
   | ImmId (Ident name) ->
     (match InfoMap.find_opt name state.info with
      | None -> fail "Panic: undefined var in codegen!"
-     | Some (Var (o, is_arg)) ->
-       let reg = if state.frame > 0 then Fp else Sp in
-       let o = if state.frame > 0 && o <> 0 && not is_arg then -16 - o else o in
+     | Some (Var (o, var_type)) ->
+       let is_arg =
+         match var_type with
+         | Argument -> true
+         | Local -> false
+       in
+       let is_inside_function_body = state.frame > 0 in
+       (* order of values on frame: first value -> RA -> old FP -> other values *)
+       let is_not_frame_start = o <> 0 in
+       let is_local_variable =
+         is_inside_function_body && is_not_frame_start && not is_arg
+       in
+       let space_for_ra = 8 in
+       let space_for_old_fp = 8 in
+       let remaining_frame_offset = space_for_ra + space_for_old_fp + o in
+       let reg = if is_inside_function_body then Fp else Sp in
+       let o = if is_local_variable then -remaining_frame_offset else o in
        add_instr (True (StackType (LD, a_regs_hd, Stack (o, reg))))
        (* change back to Arg 0 here? *)
      | Some (Func (l, arity)) ->
@@ -264,7 +278,7 @@ let rec codegen_cexpr cexpr =
   | CLam (Ident name, ae) ->
     let* _ = extend_stack 8 in
     let* cur_offset = extend_frame 8 in
-    let new_info = InfoMap.add name (Var (cur_offset, true)) state.info in
+    let new_info = InfoMap.add name (Var (cur_offset, Argument)) state.info in
     let* () = update_info new_info in
     let* state = read in
     let new_a_regs =
@@ -356,9 +370,13 @@ and codegen_aexpr = function
     let* _ = extend_stack 8 in
     let* cur_offset = extend_frame 8 in
     let* state = read in
-    let new_info = InfoMap.add name (Var (cur_offset, false)) state.info in
+    let new_info = InfoMap.add name (Var (cur_offset, Local)) state.info in
     let* () = update_info new_info in
-    let cur_offset = if cur_offset <> 0 then -16 - cur_offset else cur_offset in
+    let is_not_frame_start = cur_offset <> 0 in
+    let space_for_ra = 8 in
+    let space_for_old_fp = 8 in
+    let remaining_frame_offset = space_for_ra + space_for_old_fp + cur_offset in
+    let cur_offset = if is_not_frame_start then -remaining_frame_offset else cur_offset in
     let* () =
       add_instr (True (StackType (SD, List.hd state.a_regs, Stack (cur_offset, Fp))))
     in
@@ -386,6 +404,7 @@ let codegen_astatement astmt =
     in
     let* () = add_instr (True (IType (ADDI, Fp, Sp, required_stack_size))) in
     let fresh_stack = -8 in
+    (* uninitialized stack *)
     let fresh_frame = 0 in
     let* () = update_stack fresh_stack in
     let* () = update_frame fresh_frame in

@@ -3,5 +3,6 @@
  (deps
   ../../../repl/repl.exe
   ../../../lib/runtime.c
+  ../../../lib/callf.s
   ../build_and_run.sh
   ../../manytests/typed/010fac_anf.ml))

@@ -7,15 +7,18 @@ open Format
 type reg =
   | Zero
   | Ra
+  | Fp
   | Sp
-  | Stack of int (* offset from sp *)
+  | Stack of int * reg (* offset from sp or fp *)
   | Temp of int
   | Saved of int
   | Arg of int
 
 (* for mapping names with the way they can be reached *)
 type meta_info =
-  | Var of int (* represents stack offset of a variable *)
+  | Var of
+      int
+      * bool (* represents stack offset of a variable, and bool if it is an argument *)
   | Func of string * int (* represents label and arity of a function *)
   | Value of reg (* represents value in a register *)
 
@@ -85,11 +88,15 @@ type instr =
   | True of true_instr
   | Pseudo of pseudo_instr
 
-let pp_reg fmt = function
+let rec pp_reg fmt = function
   | Zero -> fprintf fmt "x0"
   | Ra -> fprintf fmt "ra"
+  | Fp -> fprintf fmt "fp"
   | Sp -> fprintf fmt "sp"
-  | Stack o -> fprintf fmt "%d(sp)" o
+  | Stack (o, reg) ->
+    let () = fprintf fmt "%d(" o in
+    let () = pp_reg fmt reg in
+    fprintf fmt ")"
   | Temp i -> fprintf fmt "t%d" i
   | Saved i -> fprintf fmt "s%d" i
   | Arg i -> fprintf fmt "a%d" i

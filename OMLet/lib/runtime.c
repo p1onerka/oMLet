@@ -23,13 +23,18 @@ closure *alloc_closure(void *code, int64_t arity) {
   // printf("[alloc_closure] code=%p arity=%ld closure=%p\n",
   //        code, arity, (void *)c);
 
-  return c;
+
+  closure *tagged_c = (closure *)((uintptr_t)c << 1);
+  return tagged_c;
+  //return c;
 }
 
 // apply arguments to a closure
-void *apply(closure *f, int64_t arity, void **args, int64_t argc) {
+void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   // printf("[apply] closure=%p arity=%ld received=%ld argc=%ld\n",
   //       (void *)f, f->arity, f->received, argc);
+
+  closure *f = (closure *)((uintptr_t)tagged_f >> 1);
 
   int64_t total = f->received + argc;
 
@@ -65,7 +70,9 @@ void *apply(closure *f, int64_t arity, void **args, int64_t argc) {
   // printf("[apply] partial application: new closure=%p total_received=%ld\n",
   //        (void *)partial, total);
 
-  return partial;
+  closure *tagged_partial = (closure *)((uintptr_t)partial << 1);
+
+  return tagged_partial;
 }
 
 void print_int(int a) {

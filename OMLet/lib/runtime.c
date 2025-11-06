@@ -5,6 +5,8 @@
 
 extern void *callf(void *code, uint64_t argc, void **argv);
 
+extern void *omlet_malloc(size_t size);
+
 typedef struct {
   void *code;       // function pointer
   int64_t arity;    // total number of arguments
@@ -14,7 +16,8 @@ typedef struct {
 
 // allocate a new closure
 closure *alloc_closure(void *code, int64_t arity) {
-  closure *c = malloc(sizeof(closure) + sizeof(void *) * arity);
+  //printf("i want to alloc %d bytes from closure alloc\n", sizeof(closure) + sizeof(void *) * arity);
+  closure *c = omlet_malloc(sizeof(closure) + sizeof(void *) * arity);
   c->code = code;
   c->arity = arity;
   c->received = 0;
@@ -40,7 +43,8 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
 
   // full application
   if (total == f->arity) {
-    void **all_args = malloc(sizeof(void *) * f->arity);
+    //printf("i want to alloc %d bytes from full\n", sizeof(void *) * f->arity);
+    void **all_args = omlet_malloc(sizeof(void *) * f->arity);
 
     for (int i = 0; i < f->received; i++)
       all_args[i] = f->args[i];
@@ -53,12 +57,13 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
 
     void *result = callf(f->code, f->arity, all_args);
 
-    free(all_args);
+    //free(all_args);
     return result;
   }
 
   // partial application : create new closure
-  closure *partial = malloc(sizeof(closure) + sizeof(void *) * f->arity);
+  //printf("i want to alloc %d bytes from partial\n", sizeof(closure) + sizeof(void *) * f->arity);
+  closure *partial = omlet_malloc(sizeof(closure) + sizeof(void *) * f->arity);
   partial->code = f->code;
   partial->arity = f->arity;
   partial->received = total;

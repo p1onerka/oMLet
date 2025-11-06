@@ -162,7 +162,11 @@ let codegen_immexpr immexpr =
   let* state = read in
   let a_regs_hd = List.hd state.a_regs in
   match immexpr with
-  | ImmNum n -> add_instr (Pseudo (LI (a_regs_hd, Num(n))))
+  | ImmNum n ->
+    (* turn int into tagged int *)
+    let* () = add_instr (Pseudo (LI (a_regs_hd, Num n))) in
+    let* () = add_instr (True (IType (SLLI, a_regs_hd, a_regs_hd, Num 1))) in
+    add_instr (True (IType (ADDI, a_regs_hd, a_regs_hd, Num 1)))
   | ImmId (Ident name) ->
     (match InfoMap.find_opt name state.info with
      | None -> fail "Panic: undefined var in codegen!"
@@ -190,7 +194,7 @@ let codegen_immexpr immexpr =
        (* load the function label address into a0, put arity into a1 *)
        let* () = add_instr (Pseudo (MV (Saved 11, Arg 0))) in
        let* () = add_instr (Pseudo (LA (Arg 0, l))) in
-       let* () = add_instr (Pseudo (LI (Arg 1, Num(arity)))) in
+       let* () = add_instr (Pseudo (LI (Arg 1, Num arity))) in
        add_instr (Pseudo (CALL "alloc_closure"))
      | Some (Value reg) -> add_instr (Pseudo (MV (a_regs_hd, reg))))
 ;;
@@ -207,6 +211,44 @@ let find_argument =
   | _ -> fail "argument storing on stack is not yet implemented"
 ;;
 
+let codegen_binop_tagged a_regs_hd fst snd = function
+  | CPlus ->
+    (* fst + snd - 1 *)
+    let* () = add_instr (True (RType (ADD, a_regs_hd, fst, snd))) in
+    add_instr (True (IType (ADDI, a_regs_hd, a_regs_hd, Num (-1))))
+  | CMinus ->
+    (* fst - snd + 1 *)
+    let* () = add_instr (True (RType (SUB, a_regs_hd, fst, snd))) in
+    add_instr (True (IType (ADDI, a_regs_hd, a_regs_hd, Num 1)))
+  | CMul ->
+    (* (fst >> 1) * (snd - 1) + 1 *)
+    let* () = add_instr (True (IType (SRLI, fst, fst, Num 1))) in
+    let* () = add_instr (True (IType (ADDI, snd, snd, Num (-1)))) in
+    let* () = add_instr (True (RType (MUL, a_regs_hd, fst, snd))) in
+    add_instr (True (IType (ADDI, a_regs_hd, a_regs_hd, Num 1)))
+  | CDiv ->
+    (* (fst >> 1) / (snd >> 1) << 1 + 1 *)
+    let* () = add_instr (True (IType (SRLI, fst, fst, Num 1))) in
+    let* () = add_instr (True (IType (SRLI, snd, snd, Num 1))) in
+    let* () = add_instr (True (RType (DIV, a_regs_hd, fst, snd))) in
+    let* () = add_instr (True (IType (SLLI, a_regs_hd, a_regs_hd, Num 1))) in
+    add_instr (True (IType (ADDI, a_regs_hd, a_regs_hd, Num 1)))
+  | CEq ->
+    let* () = add_instr (True (RType (XOR, a_regs_hd, fst, snd))) in
+    add_instr (Pseudo (SEQZ (a_regs_hd, a_regs_hd)))
+  | CNeq ->
+    let* () = add_instr (True (RType (SUB, a_regs_hd, fst, snd))) in
+    add_instr (Pseudo (SNEZ (a_regs_hd, a_regs_hd)))
+  | CLt -> add_instr (True (RType (SLT, a_regs_hd, fst, snd)))
+  | CLte ->
+    let* () = add_instr (True (RType (SLT, a_regs_hd, snd, fst))) in
+    add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num 1)))
+  | CGt -> add_instr (True (RType (SLT, a_regs_hd, snd, fst)))
+  | CGte ->
+    let* () = add_instr (True (RType (SLT, Arg 0, fst, snd))) in
+    add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num 1)))
+;;
+
 let rec codegen_cexpr cexpr =
   let* state = read in
   let a_regs_hd = List.hd state.a_regs in
@@ -220,26 +262,7 @@ let rec codegen_cexpr cexpr =
     let* () = codegen_immexpr i2 in
     let* reg_snd_free = find_free_reg in
     let* () = add_instr (Pseudo (MV (reg_snd_free, reg_snd))) in
-    (match op with
-     | CPlus -> add_instr (True (RType (ADD, a_regs_hd, reg_fst_free, reg_snd_free)))
-     | CMinus -> add_instr (True (RType (SUB, a_regs_hd, reg_fst_free, reg_snd_free)))
-     | CMul -> add_instr (True (RType (MUL, a_regs_hd, reg_fst_free, reg_snd_free)))
-     | CDiv -> add_instr (True (RType (DIV, a_regs_hd, reg_fst_free, reg_snd_free)))
-     (* TODO check logic for eq and neq *)
-     | CEq ->
-       let* () = add_instr (True (RType (XOR, a_regs_hd, reg_fst_free, reg_snd_free))) in
-       add_instr (Pseudo (SEQZ (a_regs_hd, a_regs_hd)))
-     | CNeq ->
-       let* () = add_instr (True (RType (SUB, a_regs_hd, reg_fst_free, reg_snd_free))) in
-       add_instr (Pseudo (SNEZ (a_regs_hd, a_regs_hd)))
-     | CLt -> add_instr (True (RType (SLT, a_regs_hd, reg_fst_free, reg_snd_free)))
-     | CLte ->
-       let* () = add_instr (True (RType (SLT, a_regs_hd, reg_snd_free, reg_fst_free))) in
-       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num(1))))
-     | CGt -> add_instr (True (RType (SLT, a_regs_hd, reg_snd_free, reg_fst_free)))
-     | CGte ->
-       let* () = add_instr (True (RType (SLT, Arg 0, reg_fst_free, reg_snd_free))) in
-       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num(1)))))
+    codegen_binop_tagged a_regs_hd reg_fst_free reg_snd_free op
   | CImmexpr i ->
     (* TODO maybe replace it into another register? *)
     codegen_immexpr i
@@ -334,8 +357,8 @@ let rec codegen_cexpr cexpr =
     in
     let* () = codegen_immexpr func in
     (* so pointer to closure in a0, arity in a1, pointer to args in a2, number of applied args in a3 *)
-    let* () = add_instr (True (IType (ADDI, Arg 2, Sp, Num(buf_offset)))) in
-    let* () = add_instr (Pseudo (LI (Arg 3, Num(nargs)))) in
+    let* () = add_instr (True (IType (ADDI, Arg 2, Sp, Num buf_offset))) in
+    let* () = add_instr (Pseudo (LI (Arg 3, Num nargs))) in
     (* call runtime *)
     let* () = add_instr (Pseudo (CALL "apply")) in
     let* state = read in
@@ -397,14 +420,14 @@ let codegen_astatement astmt =
     let* () = add_instr (True (Label func_label)) in
     let new_info = InfoMap.add name (Func (func_label, arity)) state.info in
     let* () = update_info new_info in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(-required_stack_size)))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num (-required_stack_size)))) in
     let* () =
       add_instr (True (StackType (SD, Ra, Stack (required_stack_size - 8, Sp))))
     in
     let* () =
       add_instr (True (StackType (SD, Fp, Stack (required_stack_size - 16, Sp))))
     in
-    let* () = add_instr (True (IType (ADDI, Fp, Sp, Num(required_stack_size)))) in
+    let* () = add_instr (True (IType (ADDI, Fp, Sp, Num required_stack_size))) in
     let fresh_stack = -8 in
     (* uninitialized stack *)
     let fresh_frame = 0 in
@@ -423,7 +446,7 @@ let codegen_astatement astmt =
     let* () =
       add_instr (True (StackType (LD, Fp, Stack (required_stack_size - 16, Sp))))
     in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size)))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
     add_instr (Pseudo RET)
     (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
   | Ident _, st ->
@@ -447,7 +470,7 @@ let codegen_astatement astmt =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size))))
+    then add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size)))
     else return ()
 ;;
 
@@ -463,8 +486,8 @@ let codegen_aconstruction aconstr =
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
         let* () = add_instr (Pseudo (MV (Fp, Sp))) in
-        let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(-required_stack_size)))) in
-        let* () = add_instr (Pseudo (LI (Saved 11, Num(0)))) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, Num (-required_stack_size)))) in
+        let* () = add_instr (Pseudo (LI (Saved 11, Num 0))) in
         return true
     in
     let old_a_regs = state.a_regs in
@@ -473,7 +496,7 @@ let codegen_aconstruction aconstr =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size))))
+    then add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size)))
     else return ()
   | AStatement (_, st_list) ->
     List.fold_left (fun _ -> codegen_astatement) (return ()) st_list
@@ -488,7 +511,7 @@ let codegen_aconstructions acs =
       (return ())
       acs
   in
-  let* () = add_instr (Pseudo (LI (Arg 7, Num(93)))) in
+  let* () = add_instr (Pseudo (LI (Arg 7, Num 93))) in
   let* () = add_instr (True Ecall) in
   let* state = read in
   return (List.rev state.compiled)

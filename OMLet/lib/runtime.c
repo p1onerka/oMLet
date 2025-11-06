@@ -70,6 +70,7 @@ void *apply(closure *f, int64_t arity, void **args, int64_t argc) {
 
 void print_int(int a) {
   // printf("[print_int] %ld\n", n);
-  printf("%d", a);
+  int res = a >> 1;
+  printf("%d", res);
   fflush(stdout);
 }

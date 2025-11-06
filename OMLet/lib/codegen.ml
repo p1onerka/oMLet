@@ -75,6 +75,9 @@ let init_state =
   let frame = 0 in
   let info = InfoMap.empty in
   let info = InfoMap.add "print_int" (Func ("print_int", 1)) info in
+  let info = InfoMap.add "get_heap_start" (Func ("get_heap_start", 0)) info in
+  let info = InfoMap.add "get_heap_fin" (Func ("get_heap_fin", 0)) info in
+  let info = InfoMap.add "get_heap_free_size" (Func ("get_heap_free_size", 0)) info in
   let compiled = [] in
   { label_factory; is_start_label_put; a_regs; free_regs; stack; frame; info; compiled }
 ;;
@@ -460,6 +463,7 @@ let codegen_astatement astmt =
         let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
         (* initialize s11 with 0 for further saving return value into it *)
         let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
+        let* () = add_instr (Pseudo (CALL "init_start_heap")) in
         return true
     in
     let* () = update_stack 0 in
@@ -470,7 +474,9 @@ let codegen_astatement astmt =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size)))
+    then 
+      let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
+      add_instr (Pseudo (CALL "free_heap"))
     else return ()
 ;;
 
@@ -488,6 +494,7 @@ let codegen_aconstruction aconstr =
         let* () = add_instr (Pseudo (MV (Fp, Sp))) in
         let* () = add_instr (True (IType (ADDI, Sp, Sp, Num (-required_stack_size)))) in
         let* () = add_instr (Pseudo (LI (Saved 11, Num 0))) in
+        let* () = add_instr (Pseudo (CALL "init_start_heap")) in
         return true
     in
     let old_a_regs = state.a_regs in
@@ -496,7 +503,9 @@ let codegen_aconstruction aconstr =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size)))
+    then 
+      let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
+      add_instr (Pseudo (CALL "free_heap"))
     else return ()
   | AStatement (_, st_list) ->
     List.fold_left (fun _ -> codegen_astatement) (return ()) st_list

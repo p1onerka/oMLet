@@ -474,7 +474,7 @@ let codegen_astatement astmt =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then 
+    then
       let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
       add_instr (Pseudo (CALL "free_heap"))
     else return ()
@@ -503,7 +503,7 @@ let codegen_aconstruction aconstr =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then 
+    then
       let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
       add_instr (Pseudo (CALL "free_heap"))
     else return ()

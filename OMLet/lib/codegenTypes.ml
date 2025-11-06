@@ -50,6 +50,8 @@ type itype_op =
   | JALR
   | SLTI
   | XORI
+  | SLLI (* for converting ints into tagged ints *)
+  | SRLI (* and back *)
 
 type stack_op =
   | LW
@@ -131,6 +133,8 @@ let pp_itype_op fmt = function
   | JALR -> fprintf fmt "jalr"
   | SLTI -> fprintf fmt "slti"
   | XORI -> fprintf fmt "xori"
+  | SLLI -> fprintf fmt "slli"
+  | SRLI -> fprintf fmt "srli"
 ;;
 
 let pp_stack_op fmt = function
@@ -181,8 +185,10 @@ let pp_true_instr fmt = function
     fprintf fmt "@[\t%a %a, %d(%a)@]@." pp_stype_op op pp_reg rs2 imm pp_reg rs1 *)
   | BType (op, rs1, rs2, l) ->
     fprintf fmt "@[\t%a %a, %a, %s@]@." pp_btype_op op pp_reg rs1 pp_reg rs2 l
-  | UType (op, rd, imm) -> fprintf fmt "@[\t%a %a, %a@]@." pp_utype_op op pp_reg rd pp_value imm
-  | JType (op, rd, imm) -> fprintf fmt "@[\t%a %a, %a@]@." pp_jtype_op op pp_reg rd pp_value imm
+  | UType (op, rd, imm) ->
+    fprintf fmt "@[\t%a %a, %a@]@." pp_utype_op op pp_reg rd pp_value imm
+  | JType (op, rd, imm) ->
+    fprintf fmt "@[\t%a %a, %a@]@." pp_jtype_op op pp_reg rd pp_value imm
   | Label l -> fprintf fmt "%s:@." l
   | Ecall -> fprintf fmt "ecall@."
 ;;

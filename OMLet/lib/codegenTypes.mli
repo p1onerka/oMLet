@@ -46,6 +46,8 @@ type itype_op =
   | JALR
   | SLTI
   | XORI
+  | SLLI
+  | SRLI
 
 type stack_op =
   | LW

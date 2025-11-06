@@ -162,7 +162,7 @@ let codegen_immexpr immexpr =
   let* state = read in
   let a_regs_hd = List.hd state.a_regs in
   match immexpr with
-  | ImmNum n -> add_instr (Pseudo (LI (a_regs_hd, n)))
+  | ImmNum n -> add_instr (Pseudo (LI (a_regs_hd, Num(n))))
   | ImmId (Ident name) ->
     (match InfoMap.find_opt name state.info with
      | None -> fail "Panic: undefined var in codegen!"
@@ -190,7 +190,7 @@ let codegen_immexpr immexpr =
        (* load the function label address into a0, put arity into a1 *)
        let* () = add_instr (Pseudo (MV (Saved 11, Arg 0))) in
        let* () = add_instr (Pseudo (LA (Arg 0, l))) in
-       let* () = add_instr (Pseudo (LI (Arg 1, arity))) in
+       let* () = add_instr (Pseudo (LI (Arg 1, Num(arity)))) in
        add_instr (Pseudo (CALL "alloc_closure"))
      | Some (Value reg) -> add_instr (Pseudo (MV (a_regs_hd, reg))))
 ;;
@@ -235,11 +235,11 @@ let rec codegen_cexpr cexpr =
      | CLt -> add_instr (True (RType (SLT, a_regs_hd, reg_fst_free, reg_snd_free)))
      | CLte ->
        let* () = add_instr (True (RType (SLT, a_regs_hd, reg_snd_free, reg_fst_free))) in
-       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, 1)))
+       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num(1))))
      | CGt -> add_instr (True (RType (SLT, a_regs_hd, reg_snd_free, reg_fst_free)))
      | CGte ->
        let* () = add_instr (True (RType (SLT, Arg 0, reg_fst_free, reg_snd_free))) in
-       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, 1))))
+       add_instr (True (IType (XORI, a_regs_hd, a_regs_hd, Num(1)))))
   | CImmexpr i ->
     (* TODO maybe replace it into another register? *)
     codegen_immexpr i
@@ -334,8 +334,8 @@ let rec codegen_cexpr cexpr =
     in
     let* () = codegen_immexpr func in
     (* so pointer to closure in a0, arity in a1, pointer to args in a2, number of applied args in a3 *)
-    let* () = add_instr (True (IType (ADDI, Arg 2, Sp, buf_offset))) in
-    let* () = add_instr (Pseudo (LI (Arg 3, nargs))) in
+    let* () = add_instr (True (IType (ADDI, Arg 2, Sp, Num(buf_offset)))) in
+    let* () = add_instr (Pseudo (LI (Arg 3, Num(nargs)))) in
     (* call runtime *)
     let* () = add_instr (Pseudo (CALL "apply")) in
     let* state = read in
@@ -397,14 +397,14 @@ let codegen_astatement astmt =
     let* () = add_instr (True (Label func_label)) in
     let new_info = InfoMap.add name (Func (func_label, arity)) state.info in
     let* () = update_info new_info in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(-required_stack_size)))) in
     let* () =
       add_instr (True (StackType (SD, Ra, Stack (required_stack_size - 8, Sp))))
     in
     let* () =
       add_instr (True (StackType (SD, Fp, Stack (required_stack_size - 16, Sp))))
     in
-    let* () = add_instr (True (IType (ADDI, Fp, Sp, required_stack_size))) in
+    let* () = add_instr (True (IType (ADDI, Fp, Sp, Num(required_stack_size)))) in
     let fresh_stack = -8 in
     (* uninitialized stack *)
     let fresh_frame = 0 in
@@ -423,7 +423,7 @@ let codegen_astatement astmt =
     let* () =
       add_instr (True (StackType (LD, Fp, Stack (required_stack_size - 16, Sp))))
     in
-    let* () = add_instr (True (IType (ADDI, Sp, Sp, required_stack_size))) in
+    let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size)))) in
     add_instr (Pseudo RET)
     (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
   | Ident _, st ->
@@ -447,7 +447,7 @@ let codegen_astatement astmt =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, required_stack_size)))
+    then add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size))))
     else return ()
 ;;
 
@@ -463,8 +463,8 @@ let codegen_aconstruction aconstr =
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
         let* () = add_instr (Pseudo (MV (Fp, Sp))) in
-        let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
-        let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, Num(-required_stack_size)))) in
+        let* () = add_instr (Pseudo (LI (Saved 11, Num(0)))) in
         return true
     in
     let old_a_regs = state.a_regs in
@@ -473,7 +473,7 @@ let codegen_aconstruction aconstr =
     let* () = update_a_regs old_a_regs in
     let* () = update_free_regs old_free_regs in
     if is_global
-    then add_instr (True (IType (ADDI, Sp, Sp, required_stack_size)))
+    then add_instr (True (IType (ADDI, Sp, Sp, Num(required_stack_size))))
     else return ()
   | AStatement (_, st_list) ->
     List.fold_left (fun _ -> codegen_astatement) (return ()) st_list
@@ -488,7 +488,7 @@ let codegen_aconstructions acs =
       (return ())
       acs
   in
-  let* () = add_instr (Pseudo (LI (Arg 7, 93))) in
+  let* () = add_instr (Pseudo (LI (Arg 7, Num(93)))) in
   let* () = add_instr (True Ecall) in
   let* state = read in
   return (List.rev state.compiled)

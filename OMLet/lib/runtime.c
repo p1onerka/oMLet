@@ -1,3 +1,5 @@
+#include "boxing.h"
+#include "gc.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,7 +7,10 @@
 
 extern void *callf(void *code, uint64_t argc, void **argv);
 
-extern void *omlet_malloc(size_t size);
+// extern void *omlet_malloc(size_t size);
+// typedef struct tag_t tag_t; // create alias
+// typedef struct box_t box_t; // create alias
+// extern box_t *create_box_t(tag_t tag, size_t size);
 
 typedef struct {
   void *code;       // function pointer
@@ -16,8 +21,12 @@ typedef struct {
 
 // allocate a new closure
 closure *alloc_closure(void *code, int64_t arity) {
-  //printf("i want to alloc %d bytes from closure alloc\n", sizeof(closure) + sizeof(void *) * arity);
-  closure *c = omlet_malloc(sizeof(closure) + sizeof(void *) * arity);
+  // printf("i want to alloc %d bytes from closure alloc\n", sizeof(closure) +
+  // sizeof(void *) * arity);
+  box_t *closure_box =
+      create_box(T_CLOSURE, sizeof(closure) + sizeof(void *) * arity);
+  // closure *c = omlet_malloc(sizeof(closure) + sizeof(void *) * arity);
+  closure *c = (closure *)&closure_box->values;
   c->code = code;
   c->arity = arity;
   c->received = 0;
@@ -26,10 +35,9 @@ closure *alloc_closure(void *code, int64_t arity) {
   // printf("[alloc_closure] code=%p arity=%ld closure=%p\n",
   //        code, arity, (void *)c);
 
-
   closure *tagged_c = (closure *)((uintptr_t)c << 1);
   return tagged_c;
-  //return c;
+  // return c;
 }
 
 // apply arguments to a closure
@@ -43,7 +51,8 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
 
   // full application
   if (total == f->arity) {
-    //printf("i want to alloc %d bytes from full\n", sizeof(void *) * f->arity);
+    // printf("i want to alloc %d bytes from full\n", sizeof(void *) *
+    // f->arity);
     void **all_args = omlet_malloc(sizeof(void *) * f->arity);
 
     for (int i = 0; i < f->received; i++)
@@ -57,13 +66,15 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
 
     void *result = callf(f->code, f->arity, all_args);
 
-    //free(all_args);
     return result;
   }
 
   // partial application : create new closure
-  //printf("i want to alloc %d bytes from partial\n", sizeof(closure) + sizeof(void *) * f->arity);
-  closure *partial = omlet_malloc(sizeof(closure) + sizeof(void *) * f->arity);
+  // printf("i want to alloc %d bytes from partial\n", sizeof(closure) +
+  // sizeof(void *) * f->arity);
+  box_t *closure_box =
+      create_box(T_CLOSURE, sizeof(closure) + sizeof(void *) * f->arity);
+  closure *partial = (closure *)&closure_box->values;
   partial->code = f->code;
   partial->arity = f->arity;
   partial->received = total;
@@ -80,9 +91,9 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   return tagged_partial;
 }
 
-void print_int(int a) {
+void print_int(int64_t a) {
   // printf("[print_int] %ld\n", n);
-  int res = a >> 1;
-  printf("%d", res);
+  int64_t res = a >> 1;
+  printf("%ld", res);
   fflush(stdout);
 }

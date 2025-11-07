@@ -5,6 +5,6 @@
   fac_anf_print.ml
   ../../../lib/runtime.c
   ../../../lib/gc.c
-  ../../../lib/gc.c
+  ../../../lib/gc.h
   ../../../lib/callf.s
   ../build_and_run.sh))

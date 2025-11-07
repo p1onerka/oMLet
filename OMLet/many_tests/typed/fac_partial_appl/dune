@@ -4,6 +4,7 @@
   ../../../bin/omlet.exe
   ../../../lib/runtime.c
   ../../../lib/gc.c
+  ../../../lib/gc.h
   ../../../lib/callf.s
   ../build_and_run.sh
   ../../manytests/typed/010faccps_ll.ml))

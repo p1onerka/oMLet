@@ -89,7 +89,7 @@ let () =
       (fun _ ->
          Stdlib.Format.eprintf "Positional arguments are not supported\n";
          Stdlib.exit 1)
-      "Read-Eval-Print-Loop for custom language"
+      "Compiler driver for custom language"
   in
   run_single
     opts.dump_parsetree

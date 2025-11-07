@@ -1,7 +1,7 @@
 (cram
  (applies_to large_print_test)
  (deps
-  ../../../repl/repl.exe
+  ../../../bin/omlet.exe
   large_print.ml
   ../../../lib/runtime.c
   ../../../lib/callf.s
@@ -9,4 +9,4 @@
 
 (cram
  (applies_to large_anf_test)
- (deps ../../../repl/repl.exe large_print.ml))
+ (deps ../../../bin/omlet.exe large_print.ml))

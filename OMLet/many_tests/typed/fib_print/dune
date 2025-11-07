@@ -1,7 +1,7 @@
 (cram
  (applies_to fib_print_test)
  (deps
-  ../../../repl/repl.exe
+  ../../../bin/omlet.exe
   fib_print.ml
   ../../../lib/runtime.c
   ../../../lib/callf.s
@@ -9,4 +9,4 @@
 
 (cram
  (applies_to fib_anf_test)
- (deps ../../../repl/repl.exe fib_print.ml))
+ (deps ../../../bin/omlet.exe fib_print.ml))

@@ -1,7 +1,7 @@
 Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
-  $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile fib_print.ml
+  $ dune exec ../../../bin/omlet.exe -- -dumpanf -fromfile fib_print.ml
   let rec fib =
   fun n -> 
     let lt_5 = n < 2 in

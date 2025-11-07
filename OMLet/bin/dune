@@ -1,5 +1,5 @@
 (executable
- (name repl)
+ (name omlet)
  (public_name OMLet_main)
  (libraries OMLet base stdio)
  (instrumentation

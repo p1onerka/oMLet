@@ -1,7 +1,7 @@
 Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
-  $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile fac_print.ml
+  $ dune exec ../../../bin/omlet.exe -- -dumpanf -fromfile fac_print.ml
   let rec fac =
   fun n -> 
     let lte_3 = n <= 1 in

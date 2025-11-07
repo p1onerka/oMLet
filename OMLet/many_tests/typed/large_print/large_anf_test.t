@@ -1,7 +1,7 @@
 Copyright 2025, Ksenia Kotelnikova, Sofya Kozyreva, Vyacheslav Kochergin
 SPDX-License-Identifier: LGPL-3.0-or-later
 
-  $ dune exec ../../../repl/repl.exe -- -dumpanf -fromfile large_print.ml
+  $ dune exec ../../../bin/omlet.exe -- -dumpanf -fromfile large_print.ml
   let large =
   fun x -> 
     let neq_2 = 0 <> x in

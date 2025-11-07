@@ -1,7 +1,7 @@
 (cram
  (applies_to many_args_test)
  (deps
-  ../../../repl/repl.exe
+  ../../../bin/omlet.exe
   ../../../lib/runtime.c
   ../../../lib/callf.s
   ../build_and_run.sh

@@ -22,6 +22,7 @@ callf:
 
     # --- calculation of required stack space for arguments ---
 
+    # calculate count of bytes for arguments, considering 16-byte alignment
     # put "arity + 1" into t0
     addi t0, s1, 1
     # round up t0 to nearest lower even number

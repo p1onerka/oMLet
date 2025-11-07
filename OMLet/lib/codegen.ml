@@ -67,6 +67,7 @@ let init_state =
   let is_start_label_put = false in
   let a_regs = clear_a_regs in
   let t_regs = List.init 7 (fun i -> Temp i) in
+  (* s0-s10 registers are available, but not s11 - it is saved for function return value *)
   let s_regs = List.init 11 (fun i -> Saved i) in
   let free_regs = t_regs @ s_regs in
   (* a_regs are used as a "bridge" to new values, so it is unstable to use them for storing *)
@@ -292,6 +293,7 @@ let rec codegen_cexpr cexpr =
     codegen_aexpr ae
   (* TODO: technically, name can be digit. do something about it? *)
   | CApp (func, args) ->
+    (* we may need to have previous function return value in a0 *)
     let* () = add_instr (Pseudo (MV (Arg 0, Saved 11))) in
     (* find all t* registers that should be stored *)
     let used_temps =
@@ -433,6 +435,7 @@ let codegen_astatement astmt =
         let* () = add_instr (True (Label start_label)) in
         let* () = add_instr (Pseudo (MV (Fp, Sp))) in
         let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
+        (* initialize s11 with 0 for further saving return value into it *)
         let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
         return true
     in

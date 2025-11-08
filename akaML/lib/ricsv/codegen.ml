@@ -242,6 +242,9 @@ let rec gen_i_exp env dst = function
 
 and gen_c_exp env dst = function
   | CIExp i_exp -> gen_i_exp env dst i_exp
+  | CExp_apply (IExp_ident fname, IExp_unit, []) ->
+    emit call fname;
+    return env
   | CExp_apply (IExp_ident op, i_exp1, [ i_exp2 ]) when Ast.is_bin_op op ->
     let* env = gen_i_exp env (T 0) i_exp1 in
     let* env = gen_i_exp env (T 1) i_exp2 in
@@ -397,7 +400,7 @@ and gen_a_exp env dst = function
 ;;
 
 let rec count_loc_vars_i_exp = function
-  | IExp_ident _ | IExp_constant _ -> 0
+  | IExp_ident _ | IExp_constant _ | IExp_unit -> 0
   | IExp_fun (_, a_exp) -> count_loc_vars_a_exp a_exp
 
 and count_loc_vars_c_exp = function

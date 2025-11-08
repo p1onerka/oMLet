@@ -95,9 +95,9 @@ void print_gc_status(void) {
   printf("Current allocated: %lu\n", GC.words_allocated_current);
   printf("Free        space: %ld\n", GET_BANK_FINAL(GC) - GC.ptr_base);
   printf("Heap         size: %d\n", SIZE_HEAP);
-  printf("Heap         head: %p\n", (void *)GC.ptr_base);
-  printf("Heap        start: %p\n", (void *)get_heap_start());
-  printf("Heap        final: %p\n", (void *)get_heap_final());
+  // printf("Heap         head: %p\n", (void *)GC.ptr_base);
+  // printf("Heap        start: %p\n", (void *)get_heap_start());
+  // printf("Heap        final: %p\n", (void *)get_heap_final());
   printf("Current      bank: %lu\n", GC.stats.bank_current);
   printf("Total   allocated: %lu\n", GC.stats.words_allocated_total);
   printf("GC    collections: %lu\n", GC.stats.collections_count);
@@ -360,8 +360,8 @@ void *applyN(closure *f, int64_t argc, ...) {
 // Temp Main
 
 // void a_number(void) {
-//   uint64_t *local_obj = gc_alloc(1, TAG_NUMBER);
-//   local_obj[0] = 100;
+//   uint64_t *number = gc_alloc(1, TAG_NUMBER);
+//   number[0] = 100;
 // }
 
 // void a_closure(void) {

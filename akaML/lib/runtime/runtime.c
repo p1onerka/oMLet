@@ -235,8 +235,11 @@ closure *alloc_closure(void *func, int64_t arity) {
   uint64_t size_in_words =
       ((uint64_t)size_in_bytes + sizeof(uint64_t) - 1) / sizeof(uint64_t);
 
-  closure *clos = (closure *)gc_alloc(size_in_words, TAG_CLOSURE);
-  // closure *clos = malloc(size_in_bytes);
+  closure *clos;
+#ifdef ENABLE_GC
+  clos = (closure *)gc_alloc(size_in_words, TAG_CLOSURE);
+#endif
+  clos = malloc(size_in_bytes);
   if (!clos) {
     fprintf(stderr, "Closure allocation error\n");
     exit(1);

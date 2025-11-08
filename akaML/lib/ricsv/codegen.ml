@@ -155,16 +155,22 @@ module Emission = struct
       return (Map.set env ~key:name ~data:new_loc))
   ;;
 
-  let emit_fn_prologue name stack_size =
+  let emit_fn_prologue ~enable_gc name stack_size =
     (* allocate space on stack, store RA, old FP (S0) and make a new FP *)
     emit label name;
     emit addi SP SP (-stack_size);
     emit sd RA (SP, stack_size - Platform.word_size);
     emit sd (S 0) (SP, stack_size - (2 * Platform.word_size));
-    emit addi (S 0) SP (stack_size - (2 * Platform.word_size)) ~comm:"Prologue ends"
+    emit addi (S 0) SP (stack_size - (2 * Platform.word_size)) ~comm:"Prologue ends";
+    if enable_gc && String.equal name "main"
+    then (
+      emit call "init_gc";
+      emit mv (A 0) SP;
+      emit call "set_ptr_stack")
   ;;
 
-  let emit_fn_epilogue is_main =
+  let emit_fn_epilogue ~enable_gc is_main =
+    if enable_gc && is_main then emit call "destroy_gc";
     (* restore SP, S0 and RA using FP (S0) as reference *)
     emit addi SP (S 0) (2 * Platform.word_size) ~comm:"Epilogue starts";
     emit ld RA (S 0, Platform.word_size);
@@ -420,7 +426,7 @@ and count_loc_vars_a_exp = function
     count_vars_in_pat + count_loc_vars_c_exp c_exp + count_loc_vars_a_exp a_exp
 ;;
 
-let gen_a_func f_id arg_list body_exp ppf state =
+let gen_a_func ~enable_gc f_id arg_list body_exp ppf state =
   fprintf ppf "\n  .globl %s\n  .type %s, @function\n" f_id f_id;
   let arity = List.length arg_list in
   let reg_params, stack_params =
@@ -443,11 +449,11 @@ let gen_a_func f_id arg_list body_exp ppf state =
         return @@ Map.set env ~key:name ~data:(Loc_mem (S 0, offset))
       | _ -> fail "unsupported pattern")
   in
-  emit_fn_prologue f_id stack_size;
+  emit_fn_prologue ~enable_gc f_id stack_size;
   let* st = get in
   let* () = put { st with frame_offset = 0 } in
   let* _ = gen_a_exp env (A 0) body_exp in
-  emit_fn_epilogue (String.equal f_id "main");
+  emit_fn_epilogue ~enable_gc (String.equal f_id "main");
   flush_queue ppf;
   return state
 ;;
@@ -473,10 +479,19 @@ let init_arity_map ast =
   env
 ;;
 
-let gen_a_structure ppf anf_ast =
+let gen_a_structure ~enable_gc ppf anf_ast =
   fprintf ppf ".section .text";
-  let arity_map = init_arity_map anf_ast in
-  let arity_map = Map.set arity_map ~key:"print_int" ~data:1 in
+  let arity_map =
+    let print_arities = [ "print_int", 1; "print_endline", 2 ] in
+    let gc_arities =
+      [ "collect", 3; "get_heap_start", 4; "get_heap_final", 5; "print_gc_status", 6 ]
+    in
+    let all_arities = if enable_gc then print_arities @ gc_arities else print_arities in
+    List.fold
+      ~init:(init_arity_map anf_ast)
+      ~f:(fun map (key, data) -> Map.set map ~key ~data)
+      all_arities
+  in
   let init_state = { frame_offset = 0; fresh_id = 0; arity_map } in
   let program =
     let* _ =
@@ -488,7 +503,7 @@ let gen_a_structure ppf anf_ast =
             | other -> List.rev acc, other
           in
           let pat_list, body_exp = extract_fun_params [] body_exp in
-          gen_a_func f_id pat_list body_exp ppf state
+          gen_a_func ~enable_gc f_id pat_list body_exp ppf state
         | _ -> fail "unsupported structure item")
     in
     pp_print_flush ppf ();

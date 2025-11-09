@@ -5,8 +5,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#define _GNU_SOURCE
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ucontext.h>
 #define HEAP_INIT_SIZE 1000
+#include <stdbool.h>
+
+typedef enum {
+  T_UNBOXED = 0,
+  T_CLOSURE = 1,
+} tag_t;
+
+typedef enum {
+  COLOR_UNMARKED = 0,
+  COLOR_MARKED = 1,
+} color_t;
+
+typedef struct {
+  tag_t tag;     // object type
+  color_t color; // GC mark state
+  uint16_t size; // payload size in 8-byte words
+  uint32_t pad;  // alignment
+} box_header_t;
 
 typedef struct {
   uint8_t *start;
@@ -14,8 +36,9 @@ typedef struct {
   size_t offset;
 } omletHeap_t;
 
-omletHeap_t cur_heap;
-omletHeap_t *cur_heap_ptr = &cur_heap;
+omletHeap_t heap_from;
+omletHeap_t heap_to;
+omletHeap_t *cur_heap_ptr = &heap_from;
 
 omletHeap_t *alloc_heap(size_t size) {
   uint8_t *start = (uint8_t *)malloc(size);
@@ -26,34 +49,38 @@ omletHeap_t *alloc_heap(size_t size) {
   return heap_ptr;
 }
 
-void init_heap(size_t size) { cur_heap_ptr = alloc_heap(size); }
+void init_heap(size_t size) {
+  heap_from.start = malloc(size);
+  heap_from.size = size;
+  heap_from.offset = 0;
 
-// void *get_current_sp() {
-//   void *ret;
-//   asm volatile("mv a0, sp\n" : [ret] "=r"(ret));
-//   return ret;
-// }
+  heap_to.start = malloc(size);
+  heap_to.size = size;
+  heap_to.offset = 0;
 
-static inline uintptr_t get_current_sp(void) {
-  volatile int marker = 0;
-  return (uintptr_t)&marker;
+  cur_heap_ptr = &heap_from;
+  printf("cur_heap_ptr init: %p\n", (void *)cur_heap_ptr->start);
 }
 
-box_t **stack_bottom = NULL;
-box_t **stack_top;
+static inline void *get_current_sp() {
+  void *ret;
+  asm volatile("mv %0, sp\n" : [ret] "=r"(ret));
+  return ret;
+}
+
+uint64_t **stack_bottom = NULL;
+uint64_t **stack_top;
 
 void init_start_heap() {
-  stack_bottom = (box_t **)get_current_sp();
-  // printf("Stack bottom init: %p\n", (void *)stack_bottom);
+  stack_bottom = get_current_sp();
+  printf("Stack bottom init: %p\n", (void *)stack_bottom);
   init_heap(HEAP_INIT_SIZE);
 }
 
-// void free_heap(omletHeap_t *heap) {
-//   free(heap->start);
-//   free(heap);
-// }
-
-void free_heap() { free(cur_heap_ptr->start); }
+void free_heap() {
+  // free(cur_heap_ptr->start);
+  // free(cur_heap_ptr);
+}
 
 uintptr_t get_heap_start() { return ((uintptr_t)cur_heap_ptr->start << 1) + 1; }
 
@@ -65,100 +92,169 @@ size_t get_heap_free_size() {
   return ((cur_heap_ptr->size - cur_heap_ptr->offset) << 1) + 1;
 }
 
-void *malloc_on_current_heap(size_t size) {
-  // printf("malloc_on_current_heap: size = %ld \n", size);
-  void *free_ptr = cur_heap_ptr->start + cur_heap_ptr->offset;
-  cur_heap_ptr->offset += size;
-  return free_ptr;
+// void *malloc_on_current_heap(size_t size) {
+//   void *free_ptr = cur_heap_ptr->start + cur_heap_ptr->offset;
+//   cur_heap_ptr->offset += size;
+//   return free_ptr;
+// }
+
+static inline box_header_t *get_header(uint64_t *obj) {
+  return ((box_header_t *)obj) - 1;
 }
 
-int ptr(int64_t arg) { return !(arg & 1); };
+static inline bool on_cur_heap(uint64_t *ptr) {
+  uintptr_t addr = (uintptr_t)ptr;
+  uintptr_t start = (uintptr_t)cur_heap_ptr->start;
+  uintptr_t end = start + cur_heap_ptr->size;
 
-uint8_t on_heap(box_t *box, omletHeap_t *heap) {
-  if (ptr((int64_t)box)) {
-    uintptr_t box_addr = (uintptr_t)box;
-    uintptr_t heap_start = (uintptr_t)heap->start;
-    uintptr_t heap_end = heap_start + heap->size;
-    return (heap_start <= box_addr) && (box_addr < heap_end);
-  }
-  return 0;
+  return addr >= start && addr < end;
 }
 
-box_t *mark_and_copy(box_t *old_box, omletHeap_t *old_heap) {
-  if (!on_heap(old_box, old_heap) || old_box->header.tag != T_CLOSURE) {
-    // printf("not on heap !\n");
-    return old_box;
+static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
+                             omletHeap_t *to_heap) {
+  box_header_t *old_hdr = get_header(obj);
+
+  if (old_hdr->color == COLOR_MARKED) {
+    return obj; // pointer already updated elsewhere
   }
-  // printf("closure detected!! !\n");
-  // printf("heeee !\n");
-  if (old_box->header.color == COLOR_MARKED) {
-    // printf("MARKED !\n");
-    return (box_t *)old_box->values[0];
+
+  size_t obj_bytes = sizeof(box_header_t) + old_hdr->size * sizeof(uint64_t);
+
+  if (to_heap->offset + obj_bytes > to_heap->size) {
+    fprintf(stderr, "[GC ERROR] Out of memory during copy_object\n");
+    exit(1);
+  }
+
+  uint8_t *dest = to_heap->start + to_heap->offset;
+  to_heap->offset += obj_bytes;
+
+  box_header_t *new_hdr = (box_header_t *)dest;
+  *new_hdr = *old_hdr;
+
+  uint64_t *new_obj = (uint64_t *)(new_hdr + 1);
+
+  // copy payload
+  if (old_hdr->tag == T_CLOSURE) {
+    printf("wooow\n");
+    for (uint16_t i = 0; i < old_hdr->size; i++) {
+      new_obj[i] = obj[i];
+    }
   } else {
-    // printf("unMARKED !\n");
-    box_t *new = (box_t *)malloc_on_current_heap(old_box->header.size * 8);
+    memcpy(new_obj, obj, old_hdr->size * sizeof(uint64_t));
+  }
 
-    // printf("unMARKED2 !\n");
-    // printf("new: %p\n", (void *)new);
-    // printf("old_box->header: %ld\n", old_box->header.size);
-    // printf("new->header: %ld\n", new->header.size);
-    new->header = old_box->header;
-    // printf("unMARKED3 !\n");
-    old_box->header.color = COLOR_MARKED;
-    int64_t fst_value_buf = old_box->values[0];
-    old_box->values[0] = (int64_t)new; // used as a forwarding pointer
-    new->values[0] = (int64_t)mark_and_copy((box_t *)fst_value_buf, old_heap);
-    // printf("old_box->values[0]: %ld\n", old_box->values[0]);
-    for (int i = 1; i < old_box->header.size; i++) {
-      // printf("here here!\n");
-      new->values[i] =
-          (int64_t)mark_and_copy((box_t *)old_box->values[i], old_heap);
+  old_hdr->color = COLOR_MARKED;
+  printf("[GC COPY] old_obj=%p -> new_obj=%p size=%u words tag=%d\n",
+         (void *)obj, (void *)new_obj, old_hdr->size, old_hdr->tag);
+  return new_obj;
+}
+
+static void update_pointers(uint64_t *obj, omletHeap_t *from_heap,
+                        omletHeap_t *to_heap) {
+  // printf("start\n");
+  box_header_t *hdr = get_header(obj);
+
+  if (hdr->tag != T_CLOSURE) {
+    return;
+  }
+
+  for (uint16_t i = 0; i < hdr->size; i++) {
+    uint64_t *field_ptr = (uint64_t *)obj[i];
+
+    if (!on_cur_heap(field_ptr)) {
+      // printf("not on heap\n");
+      continue;
     }
-    return (box_t *)((uint64_t)new);
+
+    box_header_t *field_hdr = get_header(field_ptr);
+    if (field_hdr->color == COLOR_MARKED) {
+      continue;
+    }
+
+    uint64_t *copied_obj = copy_object(field_ptr, from_heap, to_heap);
+    // printf("end\n");
+    obj[i] = (uint64_t)copied_obj;
+
+    // recursively update internal pointers of the copied object
+    update_pointers(copied_obj, from_heap, to_heap);
   }
 }
 
-void realloc_heap(size_t size) {
-  // printf("realloc!\n");
-  stack_top = (box_t **)get_current_sp();
-  // printf("Stack bottom: %p\n", (void *)stack_bottom);
-  // printf("Stack top: %p\n", (void *)stack_top);
-  omletHeap_t *old_heap = cur_heap_ptr;
-  // printf("old_heap ptr: %p\n", cur_heap_ptr);
-
-  omletHeap_t *new_heap = alloc_heap(size);
-  cur_heap_ptr = new_heap;
-  // printf("new_heap ptr: %p\n", cur_heap_ptr);
-
-  for (box_t **value = stack_top; value < stack_bottom; value++) {
-    // printf("mc!\n");
-    *value = mark_and_copy(*value, old_heap);
-    // printf("mc end\n");
+static void mark_and_copy() {
+  stack_top = get_current_sp();
+  if (stack_bottom == NULL || stack_top == NULL) {
+    fprintf(stderr, "[GC] Stack not initialized properly\n");
+    return;
   }
+  // printf("stack_bottom: %p\n", (void *)stack_bottom);
+  // printf("stack_top: %p\n", (void *)stack_top);
+  printf("cur_heap_ptr in mark_and_copy: %p\n", (void *)cur_heap_ptr->start);
 
-  free(old_heap->start);
-  // printf("old_heap->start\n");
-  free(old_heap);
-  // printf("old_heap\n");
+  omletHeap_t *from_heap = (cur_heap_ptr == &heap_from) ? &heap_to : &heap_from;
+  omletHeap_t *to_heap = cur_heap_ptr;
+
+  for (uint64_t **ptr = stack_top; ptr <= stack_bottom; ptr++) {
+    // printf("hello %p", *ptr);
+    uint64_t *obj_ptr = *ptr;
+
+    if (!on_cur_heap((uint64_t *)obj_ptr)) {
+      continue;
+    }
+    printf("hello %p\n", *ptr);
+
+    box_header_t *hdr = get_header((uint64_t *)obj_ptr);
+    if (hdr->color == COLOR_MARKED) {
+      continue;
+    }
+
+    uint64_t *copied_obj = copy_object((uint64_t *)obj_ptr, from_heap, to_heap);
+
+    *ptr = (uint64_t *)copied_obj;
+
+    update_pointers(copied_obj, from_heap, to_heap);
+  }
 }
 
-void *omlet_malloc(size_t size) {
+void collect(void) {
+  omletHeap_t *from_heap = cur_heap_ptr;
+  omletHeap_t *to_heap = (cur_heap_ptr == &heap_from) ? &heap_to : &heap_from;
+  to_heap->offset = 0;
+  cur_heap_ptr = to_heap;
 
-  size_t sizec = cur_heap_ptr->size;
-  // printf("cur_heap_ptr->size: %zu\n", sizec);
-  // printf("needed size: %zu\n", cur_heap_ptr->offset + size);
-  // printf("malloc\n");
-  if (cur_heap_ptr->offset + size > cur_heap_ptr->size) {
-    // printf("size: %zu\n", size);
-    size_t cur_size = cur_heap_ptr->size;
-    size_t needed_sz = size + cur_heap_ptr->offset;
-    while (cur_size < needed_sz) {
-      cur_size <<= 1;
+  mark_and_copy();
+  printf("end\n");
+}
+
+void *omlet_malloc(size_t size, tag_t tag) {
+  size_t size_in_words =
+      ((uint64_t)size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  size_t total_size = sizeof(box_header_t) + size;
+  if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
+    collect(); // run GC
+
+    printf("size1 %zu\n", cur_heap_ptr->offset + total_size);
+    printf("size2 %zu\n", cur_heap_ptr->size);
+    if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
+      fprintf(stderr, "Out of memory in omlet_malloc\n");
+      exit(1);
     }
-    // printf("before realloc\n");
-    realloc_heap(cur_size);
-    // printf("after realloc\n");
-    return malloc_on_current_heap(size);
   }
-  return malloc_on_current_heap(size);
+  uint8_t *ptr = cur_heap_ptr->start + cur_heap_ptr->offset;
+  cur_heap_ptr->offset += total_size;
+  box_header_t *header = (box_header_t *)ptr;
+  header->tag = tag;
+  header->color = COLOR_UNMARKED;
+  header->size = (uint16_t)size_in_words;
+  header->pad = 0;
+  void *payload = (void *)(header + 1);
+  // printf("[GC ALLOC] tag=%d, color=%d, size=%u words \n", header->tag,
+  //        header->color, header->size);
+  // printf("            header=%p  payload=%p\n", (void *)header, payload);
+  // printf("            heap_offset=%zu / %zu bytes (free=%zu bytes)\n",
+  //        cur_heap_ptr->offset, cur_heap_ptr->size,
+  //        cur_heap_ptr->size - cur_heap_ptr->offset);
+  // printf("--------------------------------------------------------\n");
+
+  // printf("payload %p alloced\n", payload);
+  return payload;
 }

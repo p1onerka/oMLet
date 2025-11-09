@@ -1,4 +1,3 @@
-#include "boxing.h"
 #include "gc.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -23,10 +22,11 @@ typedef struct {
 closure *alloc_closure(void *code, int64_t arity) {
   // printf("i want to alloc %d bytes from closure alloc\n", sizeof(closure) +
   // sizeof(void *) * arity);
-  box_t *closure_box =
-      create_box(T_CLOSURE, sizeof(closure) + sizeof(void *) * arity);
-  // closure *c = omlet_malloc(sizeof(closure) + sizeof(void *) * arity);
-  closure *c = (closure *)&closure_box->values;
+  // box_t *closure_box =
+  //     create_box(T_CLOSURE, sizeof(closure) + sizeof(void *) * arity);
+  closure *c =
+      omlet_malloc(sizeof(closure) + sizeof(void *) * arity, T_CLOSURE);
+  // closure *c = (closure *)&closure_box->values;
   c->code = code;
   c->arity = arity;
   c->received = 0;
@@ -53,18 +53,19 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   if (total == f->arity) {
     // printf("i want to alloc %d bytes from full\n", sizeof(void *) *
     // f->arity);
-    void **all_args = omlet_malloc(sizeof(void *) * f->arity);
+    void **all_args = malloc(sizeof(void *) * f->arity);
 
     for (int i = 0; i < f->received; i++)
       all_args[i] = f->args[i];
-
     for (int i = 0; i < argc; i++)
       all_args[f->received + i] = args[i];
 
     // printf("[apply] full application, calling function %p with %ld args\n",
     //       f->code, f->arity);
 
+    // printf("supposedly allocated\n");
     void *result = callf(f->code, f->arity, all_args);
+    // printf("boom\n");
 
     return result;
   }
@@ -72,9 +73,9 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   // partial application : create new closure
   // printf("i want to alloc %d bytes from partial\n", sizeof(closure) +
   // sizeof(void *) * f->arity);
-  box_t *closure_box =
-      create_box(T_CLOSURE, sizeof(closure) + sizeof(void *) * f->arity);
-  closure *partial = (closure *)&closure_box->values;
+  closure *partial =
+      omlet_malloc(sizeof(closure) + sizeof(void *) * f->arity, T_CLOSURE);
+  // closure *partial = (closure *)&closure_box->values;
   partial->code = f->code;
   partial->arity = f->arity;
   partial->received = total;

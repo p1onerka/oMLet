@@ -13,14 +13,22 @@ void print_int(long n) { printf("%ld", n); }
 
 /* ========== Garbage Collector ========== */
 
-#define SET_HEADER(size, tag) ((uint64_t)((size << 10u) + (tag % 256u)))
-#define GET_SIZE(ptr) (*((uint64_t *)ptr - 1) >> 10)
-#define GET_TAG(ptr) (*((uint64_t *)ptr - 1) & 0xFF)
-
 int SIZE_HEAP = 200;
-const uint8_t TAG_NUMBER = 0u;
-const uint8_t TAG_CLOSURE = 1u;
-const uint64_t IS_MARKED = 0xFF;
+const uint8_t TAG_NUMBER = 0;
+const uint8_t TAG_CLOSURE = 247;
+
+// [63-49: size] [48: mark] [47-40: tag] [39-0: value]
+#define SHIFT_SIZE 49
+#define SHIFT_MARK 48
+#define SHIFT_TAG 40
+
+#define SET_HEADER(size, mark, tag)                                                 \
+  ((uint64_t)(((uint64_t)(size) << SHIFT_SIZE) | ((uint64_t)(mark) << SHIFT_MARK) | \
+              ((uint64_t)(tag) << SHIFT_TAG)))
+#define GET_SIZE(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_SIZE) & 0x3FFF)
+#define GET_MARK(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_MARK) & 0x1)
+#define GET_TAG(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_TAG) & 0xFF)
+#define IS_NOT_PTR(ptr) (*((uint64_t *)(ptr)) & 0x7)
 
 typedef struct {
   uint64_t words_allocated_total;
@@ -109,73 +117,66 @@ static uint64_t *PTR_STACK = NULL;
 void set_ptr_stack(uint64_t *ptr_stack) { PTR_STACK = ptr_stack; }
 
 static uint64_t *copy_object(uint64_t *obj) {
-  uint64_t size = GET_SIZE(obj);
-  uint64_t tag = GET_TAG(obj);
-  const uint64_t size_new = size + 1u;
+  const uint64_t size = GET_SIZE(obj);
+  const uint64_t tag = GET_TAG(obj);
+  const uint64_t offset = size + 1;
 
-  if (GC.ptr_base + size_new > GET_BANK_FINAL(GC)) {
+  if (GC.ptr_base + offset > GET_BANK_FINAL(GC)) {
     fprintf(stderr, "Out of memory during GC\n");
     exit(1);
   }
 
-  *(GC.ptr_base) = SET_HEADER(size, tag);
+  *(GC.ptr_base) = SET_HEADER(size, 0x0, tag);
   uint64_t *obj_sub = GC.ptr_base + 1;
 
   if (tag == TAG_CLOSURE) {
-    for (int i = 0; i < size; i++) {
+    for (uint64_t i = 0; i < size; i++) {
       obj_sub[i] = obj[i];
     }
   } else {
     memcpy(obj_sub, obj, size * sizeof(uint64_t));
   }
 
-  obj = obj_sub;
-  *(obj - 1) = SET_HEADER(size, IS_MARKED);
-
-  GC.ptr_base += size_new;
+  *(obj - 1) = SET_HEADER(size, 0x1, tag);
+  GC.ptr_base += offset;
 
   return obj_sub;
 }
+static void update_ptrs(uint64_t *obj);
+
+static void process_ptr(is_in_bank_t is_in_bank_cur, uint64_t *ptr) {
+  uint64_t *ptr_cond = (uint64_t *)*ptr;
+  if (ptr_cond == NULL)
+    return;
+
+  if (is_in_bank_cur(ptr_cond) && !GET_MARK(ptr_cond)) {
+    uint64_t *obj_sub = copy_object(ptr_cond);
+    *ptr = (uint64_t)obj_sub;
+    update_ptrs(obj_sub);
+  }
+}
 
 static void update_ptrs(uint64_t *obj) {
-  uint64_t size = GET_SIZE(obj);
-  uint64_t tag = GET_TAG(obj);
+  const uint64_t size = GET_SIZE(obj);
+  const uint64_t tag = GET_TAG(obj);
 
-  const is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
+  is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
 
-  for (uint64_t i = 0; i < size; i++) {
-    uint64_t *ptr_cond = (uint64_t *)obj[i];
-    if (!is_in_bank_cur(ptr_cond))
-      continue;
-
-    if (GET_TAG(ptr_cond) == IS_MARKED) {
-      obj[i] = (uint64_t)ptr_cond;
-    } else {
-      uint64_t *obj_sub = copy_object(ptr_cond);
-      obj[i] = (uint64_t)obj_sub;
-      update_ptrs(obj_sub);
-    }
-  }
+  for (uint64_t i = 0; i < size; i++)
+    process_ptr(is_in_bank_cur, &obj[i]);
 }
 
 static void mark_and_copy(void) {
   if (PTR_STACK == NULL)
     return;
 
-  const is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
+  is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
 
   uint64_t *bottom = PTR_STACK;
-  uint64_t *top = __builtin_frame_address(0);
+  uint64_t *top = (uint64_t *)__builtin_frame_address(0);
 
-  for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
-    uint64_t *ptr_cond = ptr;
-
-    if (is_in_bank_cur(ptr_cond) && GET_TAG(ptr_cond) != IS_MARKED) {
-      uint64_t *obj_sub = copy_object(ptr_cond);
-      ptr_cond = obj_sub;
-      update_ptrs(obj_sub);
-    }
-  }
+  for (uint64_t *ptr = top; ptr <= bottom; ptr++)
+    process_ptr(is_in_bank_cur, ptr);
 }
 
 void collect(void) {
@@ -187,35 +188,35 @@ void collect(void) {
 
   mark_and_copy();
 
-  uint64_t words = GC.ptr_base - bank_start;
+  const uint64_t words = GC.ptr_base - bank_start;
   GC.words_allocated_current = words;
 }
 
 uint64_t *gc_alloc(uint64_t size, uint64_t tag) {
+  const uint64_t offset = size + 1;
   uint64_t *bank_final = GET_BANK_FINAL(GC);
-  const uint64_t size_new = size + 1u;
 
-  if (GC.ptr_base + size_new > bank_final) {
+  if (GC.ptr_base + offset > bank_final) {
     collect();
 
     bank_final = GET_BANK_FINAL(GC);
-    if (GC.ptr_base + size_new > bank_final) {
+    if (GC.ptr_base + offset > bank_final) {
       fprintf(stderr, "Out of memory after GC\n");
       exit(1);
     }
   }
   GC.stats.allocations_count++;
 
-  *(GC.ptr_base) = SET_HEADER(size, tag);
+  *(GC.ptr_base) = SET_HEADER(size, 0x0, tag);
 
   uint64_t *obj = GC.ptr_base + 1;
-  for (uint64_t i = 0u; i < size; i++) {
-    obj[i] = 0u;
+  for (uint64_t i = 0; i < size; i++) {
+    obj[i] = 0;
   }
 
-  GC.ptr_base += size_new;
-  GC.words_allocated_current += size_new;
-  GC.stats.words_allocated_total += size_new;
+  GC.ptr_base += offset;
+  GC.words_allocated_current += offset;
+  GC.stats.words_allocated_total += offset;
   return obj;
 }
 
@@ -229,7 +230,6 @@ typedef struct {
 } closure;
 
 closure *alloc_closure(void *func, int64_t arity) {
-  // init_gc();
   // print_gc_status();
   size_t size_in_bytes = sizeof(closure) + arity * sizeof(void *);
   uint64_t size_in_words =
@@ -238,8 +238,9 @@ closure *alloc_closure(void *func, int64_t arity) {
   closure *clos;
 #ifdef ENABLE_GC
   clos = (closure *)gc_alloc(size_in_words, TAG_CLOSURE);
+#else
+  clos = (closure *)malloc(size_in_bytes);
 #endif
-  clos = malloc(size_in_bytes);
   if (!clos) {
     fprintf(stderr, "Closure allocation error\n");
     exit(1);
@@ -376,11 +377,28 @@ void *applyN(closure *f, int64_t argc, ...) {
 
 // int main() {
 //   init_gc();
-//   set_ptr_stack(__builtin_frame_address(0));
+//   set_ptr_stack((uint64_t *)__builtin_frame_address(0));
+
+//   uint64_t *number = gc_alloc(1, TAG_NUMBER);
+//   number[0] = 100;
 
 //   a_number();
-//   for (int i = 0; i < 8; i++)
+
+//   uint64_t *objects[10];
+//   int obj_count = 0;
+
+//   for (int i = 0; i < 8; i++) {
+//     closure *clos =
+//         (closure *)gc_alloc(sizeof(closure) / sizeof(uint64_t), TAG_CLOSURE);
+//     int64_t arity = 3;
+//     clos->arity = arity;
+//     clos->args_received = (int64_t)2;
+//     clos->code = (void *)0;
+//     memset(clos->args, 0, arity * sizeof(void *));
+//     objects[obj_count++] = (uint64_t *)clos;
 //     a_closure();
+//   }
+
 //   print_gc_status();
 
 //   collect();

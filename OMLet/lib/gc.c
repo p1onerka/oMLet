@@ -43,6 +43,21 @@ omletHeap_t heap_from;
 omletHeap_t heap_to;
 omletHeap_t *cur_heap_ptr = &heap_from;
 
+uint64_t total_amount_of_allocated_memory = 0;
+uint64_t number_of_gc_sessions = 0;
+
+void print_gc_status() {
+  printf("--------------GC STATUS--------------\n");
+  printf("Total amount of allocated memory (in bytes): %ld\n",
+         total_amount_of_allocated_memory);
+  printf("Total number of GC sessions: %ld\n", number_of_gc_sessions);
+  printf("Borders of current heap: from %p to %p\n", cur_heap_ptr->start,
+         cur_heap_ptr->start + cur_heap_ptr->size);
+  printf("Free space (in bytes) on current heap: %ld\n",
+         cur_heap_ptr->size - cur_heap_ptr->offset);
+  printf("-------------------------------------\n");
+}
+
 omletHeap_t *alloc_heap(size_t size) {
   uint8_t *start = (uint8_t *)malloc(size);
   omletHeap_t *heap_ptr = (omletHeap_t *)malloc(sizeof(*heap_ptr));

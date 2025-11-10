@@ -26,6 +26,9 @@
  (deps
   ../bin/akaML.exe
   fewtests/01faccps.ml
+  fewtests/02facclos.ml
+  fewtests/03clos.ml
+  fewtests/04clos.ml
   manytests/do_not_type/001.ml
   manytests/do_not_type/002if.ml
   manytests/do_not_type/003occurs.ml

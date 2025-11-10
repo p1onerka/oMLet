@@ -105,9 +105,11 @@ void print_gc_status(void) {
   printf("Current allocated: %lu\n", GC.words_allocated_current);
   printf("Free        space: %ld\n", GET_BANK_FINAL(GC) - GC.ptr_base);
   printf("Heap         size: %d\n", SIZE_HEAP);
-  // printf("Heap         head: %p\n", (void *)GC.ptr_base);
-  // printf("Heap        start: %p\n", (void *)get_heap_start());
-  // printf("Heap        final: %p\n", (void *)get_heap_final());
+#if !defined(TEST)
+  printf("Heap         head: %p\n", (void *)GC.ptr_base);
+  printf("Heap        start: %p\n", (void *)get_heap_start());
+  printf("Heap        final: %p\n", (void *)get_heap_final());
+#endif
   printf("Current      bank: %lu\n", GC.stats.bank_current);
   printf("Total   allocated: %lu\n", GC.stats.words_allocated_total);
   printf("GC    collections: %lu\n", GC.stats.collections_count);
@@ -148,7 +150,9 @@ static void update_ptrs(uint64_t *obj);
 
 static void process_ptr(is_in_bank_t is_in_bank_cur, uint64_t *ptr) {
   uint64_t value = *ptr;
-  // printf("Address %p | Value (as address) %p\n", ptr, (uint64_t *)value);
+#if !defined(TEST)
+  printf("Address %p | Value (as address) %p\n", ptr, (uint64_t *)value);
+#endif
   if (value == 0 || IS_NOT_PTR(value))
     return;
 

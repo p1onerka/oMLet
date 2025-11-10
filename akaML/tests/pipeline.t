@@ -106,3 +106,109 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    collections: 1
   GC    allocations: 10
   =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/02facclos.ml -o 02facclos.s
+  $ riscv64-linux-gnu-as -march=rv64gc 02facclos.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  === GC Status ===
+  Current allocated: 6
+  Free        space: 194
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 6
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 6
+  Free        space: 194
+  Heap         size: 200
+  Current      bank: 1
+  Total   allocated: 6
+  GC    collections: 1
+  GC    allocations: 1
+  =================
+  48=== GC Status ===
+  Current allocated: 0
+  Free        space: 200
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 6
+  GC    collections: 2
+  GC    allocations: 2
+  =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/03clos.ml -o 03clos.s
+  $ riscv64-linux-gnu-as -march=rv64gc 03clos.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  === GC Status ===
+  Current allocated: 7
+  Free        space: 193
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 7
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 7
+  Free        space: 193
+  Heap         size: 200
+  Current      bank: 1
+  Total   allocated: 7
+  GC    collections: 1
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 200
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 7
+  GC    collections: 2
+  GC    allocations: 1
+  =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/04clos.ml -o 04clos.s
+  $ riscv64-linux-gnu-as -march=rv64gc 04clos.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  === GC Status ===
+  Current allocated: 9
+  Free        space: 191
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 9
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 9
+  Free        space: 191
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 9
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 9
+  Free        space: 191
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 9
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 200
+  Heap         size: 200
+  Current      bank: 0
+  Total   allocated: 9
+  GC    collections: 2
+  GC    allocations: 1
+  =================
+  15

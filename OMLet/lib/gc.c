@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ucontext.h>
-#define HEAP_INIT_SIZE 5000
+#define HEAP_INIT_SIZE 1000
 #include <stdbool.h>
 
 typedef uint8_t tag_t;
@@ -171,7 +171,7 @@ static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
   // copy payload
   if (old_hdr->tag == T_CLOSURE) {
     // printf("tag1 %d\n", old_hdr->tag);
-    printf("wooow\n");
+    // printf("wooow\n");
     for (uint16_t i = 0; i < old_hdr->size; i++) {
       // printf("tag2 %d\n", old_hdr->tag);
       // printf("[COPY WORD] old_obj[%u]=%p\n", i, (void *)obj[i]);
@@ -265,25 +265,96 @@ static void mark_and_copy(omletHeap_t *from_heap, omletHeap_t *to_heap) {
 }
 
 void collect(void) {
+  printf("call collect()\n");
+  // printf("from_heap->size %zu\n", cur_heap_ptr->size);
+  printf("from_heap->offset %zu\n", cur_heap_ptr->offset);
   omletHeap_t *from_heap = cur_heap_ptr;
   omletHeap_t *to_heap = (cur_heap_ptr == &heap_from) ? &heap_to : &heap_from;
   to_heap->offset = 0;
   cur_heap_ptr = to_heap;
 
   mark_and_copy(from_heap, to_heap);
-  // printf("end\n");
+  printf("end\n");
+}
+
+// call when a single collect() didn't free enough space
+void realloc_heap(void) {
+  size_t old_size = heap_from.size;
+  size_t new_size = old_size * 2;
+
+  omletHeap_t old_from = heap_from;
+  omletHeap_t old_to = heap_to;
+
+  // a new buffer for the new "from"
+  uint8_t *new_from_buf = malloc(new_size);
+  if (!new_from_buf) {
+    fprintf(stderr, "[GC REALLOC] malloc failed for new_from_buf (%zu bytes)\n",
+            new_size);
+    exit(1);
+  }
+
+  // a temporary to-heap that points to the new_from_buf
+  omletHeap_t tmp_to;
+  tmp_to.start = new_from_buf;
+  tmp_to.size = new_size;
+  tmp_to.offset = 0;
+
+  // mark-and-copy from the old from-heap into tmp_to
+  mark_and_copy(&old_from, &tmp_to);
+
+  // tmp_to now contains all live objects, packed at its start
+  size_t used = tmp_to.offset;
+  fprintf(stderr,
+          "[GC REALLOC] copied %zu bytes of live objects into new_from\n",
+          used);
+
+  uint8_t *new_to_buf = malloc(new_size);
+  if (!new_to_buf) {
+    fprintf(stderr, "[GC REALLOC] malloc failed for new_to_buf (%zu bytes)\n",
+            new_size);
+    free(new_from_buf);
+    exit(1);
+  }
+
+  heap_from.start = new_from_buf;
+  heap_from.size = new_size;
+  heap_from.offset = used;
+
+  heap_to.start = new_to_buf;
+  heap_to.size = new_size;
+  heap_to.offset = 0;
+
+  cur_heap_ptr = &heap_from;
+
+  // free(old_from.start);
+  // free(old_to.start);
+
+  fprintf(stderr, "[GC REALLOC] done. new heap_from at %p..%p (used=%zu)\n",
+          (void *)heap_from.start, (void *)(heap_from.start + heap_from.size),
+          heap_from.offset);
 }
 
 void *omlet_malloc(size_t size, tag_t tag) {
-  size_t size_in_words =
-      ((uint64_t)size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
-  size_t total_size = sizeof(box_header_t) + size;
-  if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
-    collect(); // run GC
+  // size_t size_in_words = (size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  // size_t payload_bytes = size_in_words * sizeof(uint64_t);
+  // size_t total_size = sizeof(box_header_t) + payload_bytes;
+  size_t size_in_words = (size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  // size_t payload_bytes = size_in_words * sizeof(uint64_t);
+  // size_t total_size = sizeof(box_header_t) + payload_bytes;
 
+  size_t total_size = sizeof(box_header_t) + size;
+  // printf("total %zu\n", total);
+  // printf("total_size %zu\n", total_size);
+
+  // size_t total_size = sizeof(box_header_t) + size + sizeof(uint64_t) - 1;
+  if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
+    printf("size1 before collect %zu\n", cur_heap_ptr->offset + total_size);
+    // collect(); // run GC
+    realloc_heap();
     printf("size1 %zu\n", cur_heap_ptr->offset + total_size);
-    printf("size2 %zu\n", cur_heap_ptr->size);
     if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
+      printf("meow\n");
+      // realloc_heap();
       fprintf(stderr, "Out of memory in omlet_malloc\n");
       exit(1);
     }

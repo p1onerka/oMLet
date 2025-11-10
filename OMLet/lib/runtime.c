@@ -18,6 +18,24 @@ typedef struct {
   void *args[];     // flexible array of applied arguments
 } closure;
 
+void print_closure(closure *c) {
+  if (!c) {
+    printf("<closure: NULL>\n");
+    return;
+  }
+
+  printf("Closure at %p:\n", (void *)c);
+  printf("  code     = %p\n", c->code);
+  printf("  arity    = %ld\n", c->arity);
+  printf("  received = %ld\n", c->received);
+
+  // Print all applied arguments
+  for (int64_t i = 0; i < c->received; i++) {
+    printf("  args[%ld] = %p\n", i, c->args[i]);
+  }
+  printf("----------------------------------------\n");
+}
+
 // allocate a new closure
 closure *alloc_closure(void *code, int64_t arity) {
   // printf("i want to alloc %d bytes from closure alloc\n", sizeof(closure) +
@@ -35,9 +53,11 @@ closure *alloc_closure(void *code, int64_t arity) {
   // printf("[alloc_closure] code=%p arity=%ld closure=%p\n",
   //        code, arity, (void *)c);
 
-  closure *tagged_c = (closure *)((uintptr_t)c << 1);
-  return tagged_c;
-  // return c;
+  printf("alloc closure\n");
+  print_closure(c);
+  // closure *tagged_c = (closure *)((uintptr_t)c << 1);
+  // return tagged_c;
+  return c;
 }
 
 // apply arguments to a closure
@@ -45,7 +65,10 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   // printf("[apply] closure=%p arity=%ld received=%ld argc=%ld\n",
   //       (void *)f, f->arity, f->received, argc);
 
-  closure *f = (closure *)((uintptr_t)tagged_f >> 1);
+  // closure *f = (closure *)((uintptr_t)tagged_f >> 1);
+  closure *f = tagged_f;
+  printf("apply closure\n");
+  print_closure(f);
 
   int64_t total = f->received + argc;
 
@@ -70,26 +93,33 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
     return result;
   }
 
-  // partial application : create new closure
-  // printf("i want to alloc %d bytes from partial\n", sizeof(closure) +
-  // sizeof(void *) * f->arity);
+  // printf("partial application : f before malloc\n");
+  // print_closure(f);
   closure *partial =
       omlet_malloc(sizeof(closure) + sizeof(void *) * f->arity, T_CLOSURE);
-  // closure *partial = (closure *)&closure_box->values;
+  printf("partial application : f after malloc\n");
+  print_closure(f);
+  printf("partial application : create new closure\n");
+
   partial->code = f->code;
   partial->arity = f->arity;
   partial->received = total;
-  for (int i = 0; i < f->received; i++)
+
+  for (int i = 0; i < f->received; i++) {
+    // printf("I GOT %d ARG\n", i);
     partial->args[i] = f->args[i];
+  }
   for (int i = 0; i < argc; i++)
     partial->args[f->received + i] = args[i];
 
+  print_closure(partial);
   // printf("[apply] partial application: new closure=%p total_received=%ld\n",
   //        (void *)partial, total);
 
-  closure *tagged_partial = (closure *)((uintptr_t)partial << 1);
+  // closure *tagged_partial = (closure *)((uintptr_t)partial << 1);
 
-  return tagged_partial;
+  // return tagged_partial;
+  return partial;
 }
 
 void print_int(int64_t a) {

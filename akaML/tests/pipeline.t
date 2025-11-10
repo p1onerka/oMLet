@@ -80,29 +80,29 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
-  Current allocated: 73
-  Free        space: 1427
-  Heap         size: 1500
+  Current allocated: 199
+  Free        space: 1401
+  Heap         size: 1600
   Current      bank: 0
-  Total   allocated: 73
+  Total   allocated: 199
   GC    collections: 0
   GC    allocations: 14
   =================
   === GC Status ===
   Current allocated: 5
-  Free        space: 1495
-  Heap         size: 1500
+  Free        space: 1595
+  Heap         size: 1600
   Current      bank: 1
-  Total   allocated: 73
+  Total   allocated: 199
   GC    collections: 1
   GC    allocations: 14
   =================
   72024=== GC Status ===
-  Current allocated: 122
-  Free        space: 1378
-  Heap         size: 1500
+  Current allocated: 332
+  Free        space: 1268
+  Heap         size: 1600
   Current      bank: 1
-  Total   allocated: 190
+  Total   allocated: 526
   GC    collections: 1
   GC    allocations: 36
   =================
@@ -113,8 +113,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
   Current allocated: 6
-  Free        space: 1494
-  Heap         size: 1500
+  Free        space: 1594
+  Heap         size: 1600
   Current      bank: 0
   Total   allocated: 6
   GC    collections: 0
@@ -122,8 +122,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   === GC Status ===
   Current allocated: 6
-  Free        space: 1494
-  Heap         size: 1500
+  Free        space: 1594
+  Heap         size: 1600
   Current      bank: 1
   Total   allocated: 6
   GC    collections: 1
@@ -131,8 +131,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   48=== GC Status ===
   Current allocated: 11
-  Free        space: 1489
-  Heap         size: 1500
+  Free        space: 1589
+  Heap         size: 1600
   Current      bank: 0
   Total   allocated: 16
   GC    collections: 2
@@ -145,8 +145,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
   Current allocated: 7
-  Free        space: 1493
-  Heap         size: 1500
+  Free        space: 1593
+  Heap         size: 1600
   Current      bank: 0
   Total   allocated: 7
   GC    collections: 0
@@ -154,8 +154,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   === GC Status ===
   Current allocated: 7
-  Free        space: 1493
-  Heap         size: 1500
+  Free        space: 1593
+  Heap         size: 1600
   Current      bank: 1
   Total   allocated: 7
   GC    collections: 1
@@ -163,8 +163,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   === GC Status ===
   Current allocated: 7
-  Free        space: 1493
-  Heap         size: 1500
+  Free        space: 1593
+  Heap         size: 1600
   Current      bank: 0
   Total   allocated: 11
   GC    collections: 2
@@ -176,38 +176,38 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
-  Current allocated: 24
-  Free        space: 1476
-  Heap         size: 1500
+  Current allocated: 80
+  Free        space: 1520
+  Heap         size: 1600
   Current      bank: 0
-  Total   allocated: 24
+  Total   allocated: 80
   GC    collections: 0
   GC    allocations: 3
   =================
   === GC Status ===
-  Current allocated: 39
-  Free        space: 1461
-  Heap         size: 1500
+  Current allocated: 151
+  Free        space: 1449
+  Heap         size: 1600
   Current      bank: 0
-  Total   allocated: 39
+  Total   allocated: 151
   GC    collections: 0
   GC    allocations: 5
   =================
   === GC Status ===
-  Current allocated: 18
-  Free        space: 1482
-  Heap         size: 1500
+  Current allocated: 130
+  Free        space: 1470
+  Heap         size: 1600
   Current      bank: 1
-  Total   allocated: 39
+  Total   allocated: 151
   GC    collections: 1
   GC    allocations: 5
   =================
   === GC Status ===
-  Current allocated: 18
-  Free        space: 1482
-  Heap         size: 1500
+  Current allocated: 130
+  Free        space: 1470
+  Heap         size: 1600
   Current      bank: 0
-  Total   allocated: 45
+  Total   allocated: 157
   GC    collections: 2
   GC    allocations: 6
   =================

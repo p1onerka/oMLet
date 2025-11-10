@@ -15,7 +15,7 @@ void print_int(long n) { printf("%ld", TO_ML_INTEGER(n)); }
 
 /* ========== Garbage Collector ========== */
 
-int SIZE_HEAP = 1500;
+int SIZE_HEAP = 1600;
 const uint8_t TAG_NUMBER = 0;
 const uint8_t TAG_CLOSURE = 247;
 
@@ -115,6 +115,7 @@ void print_gc_status(void) {
   printf("GC    collections: %lu\n", GC.stats.collections_count);
   printf("GC    allocations: %lu\n", GC.stats.allocations_count);
   printf("=================\n");
+  fflush(stdout);
 }
 
 static uint64_t *PTR_STACK = NULL;
@@ -146,19 +147,17 @@ static uint64_t *copy_object(uint64_t *obj) {
 
   return obj_sub;
 }
+
 static void update_ptrs(uint64_t *obj);
 
-static void process_ptr(is_in_bank_t is_in_bank_cur, uint64_t *ptr) {
+static void process_ptr(is_in_bank_t is_in_bank_old, uint64_t *ptr) {
   uint64_t value = *ptr;
-#if !defined(TEST)
-  printf("Address %p | Value (as address) %p\n", ptr, (uint64_t *)value);
-#endif
   if (value == 0 || IS_NOT_PTR(value)) {
     return;
   }
 
   uint64_t *ptr_cond = (uint64_t *)value;
-  if (is_in_bank_cur(ptr_cond) && !GET_MARK(ptr_cond)) {
+  if (is_in_bank_old(ptr_cond) && !GET_MARK(ptr_cond)) {
     uint64_t *obj_sub = copy_object(ptr_cond);
     *ptr = (uint64_t)obj_sub;
     update_ptrs(obj_sub);
@@ -169,10 +168,10 @@ static void update_ptrs(uint64_t *obj) {
   const uint64_t size = GET_SIZE(obj);
   const uint64_t tag = GET_TAG(obj);
 
-  is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
+  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK(GC);
 
   for (uint64_t i = 0; i < size; i++) {
-    process_ptr(is_in_bank_cur, &obj[i]);
+    process_ptr(is_in_bank_old, &obj[i]);
   }
 }
 
@@ -181,13 +180,13 @@ static void mark_and_copy(void) {
     return;
   }
 
-  is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
+  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK(GC);
 
   uint64_t *bottom = PTR_STACK;
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
 
-  for (uint64_t *ptr = top + 1; ptr <= bottom; ptr++) {
-    process_ptr(is_in_bank_cur, ptr);
+  for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
+    process_ptr(is_in_bank_old, ptr);
   }
 }
 
@@ -242,7 +241,6 @@ typedef struct {
 } closure;
 
 closure *alloc_closure(void *func, int64_t arity) {
-  // print_gc_status();
   size_t size_in_bytes = sizeof(closure) + arity * sizeof(void *);
   uint64_t size_in_words =
       ((uint64_t)size_in_bytes + sizeof(uint64_t) - 1) / sizeof(uint64_t);
@@ -271,8 +269,7 @@ closure *copy_closure(const closure *src) {
 
   closure *dst;
 #ifdef ENABLE_GC
-  uint64_t size_words = (size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
-  dst = (closure *)gc_alloc(size_words, TAG_CLOSURE);
+  dst = (closure *)gc_alloc(size, TAG_CLOSURE);
 #else
   dst = (closure *)malloc(size);
 #endif
@@ -335,10 +332,10 @@ void *applyN(closure *f, int64_t argc, ...) {
         "li   t4, 0\n"
         "el1:\n"
         "beq  t4, t3, en1\n"
-        "slli t5, t4, 3\n" /* offset = i * 8 */
-        "add t6, t2, t5\n" /* addr = &stack_args[i] */
-        "ld   t0, 0(t6)\n" /* t0 = stack_args[i] */
-        "sd   t0, 0(t1)\n" /* store on stack */
+        "slli t5, t4, 3\n"  /* offset = i * 8 */
+        "add  t6, t2, t5\n" /* addr = &stack_args[i] */
+        "ld   t0, 0(t6)\n"  /* t0 = stack_args[i] */
+        "sd   t0, 0(t1)\n"  /* store on stack */
         "addi t1, t1, 8\n"
         "addi t4, t4, 1\n"
         "j el1\n"
@@ -360,7 +357,7 @@ void *applyN(closure *f, int64_t argc, ...) {
 
         /* restore the stack */
         "mv   t0, %[stack_bytes]\n"
-        "add sp, sp, t0\n"
+        "add  sp, sp, t0\n"
 
         /* return the result to a variable */
         "mv   %[ret], a0\n"
@@ -385,57 +382,3 @@ void *applyN(closure *f, int64_t argc, ...) {
 
   return new_closure;
 }
-
-// Temp Main
-
-// void a_number(void) {
-//   uint64_t *number = gc_alloc(1, TAG_NUMBER);
-//   number[0] = 100;
-// }
-
-// void a_closure(void) {
-//   closure *clos =
-//       (closure *)gc_alloc(sizeof(closure) / sizeof(uint64_t), TAG_CLOSURE);
-//   int64_t arity = 3;
-//   clos->arity = arity;
-//   clos->args_received = (int64_t)2;
-//   clos->code = (void *)0;
-//   memset(clos->args, 0, arity * sizeof(void *));
-// }
-
-// int main() {
-//   init_gc();
-//   set_ptr_stack((uint64_t *)__builtin_frame_address(0));
-
-//   uint64_t *number = gc_alloc(1, TAG_NUMBER);
-//   number[0] = 100;
-
-//   a_number();
-
-//   uint64_t *objects[10];
-//   int obj_count = 0;
-
-//   for (int i = 0; i < 8; i++) {
-//     closure *clos =
-//         (closure *)gc_alloc(sizeof(closure) / sizeof(uint64_t), TAG_CLOSURE);
-//     int64_t arity = 3;
-//     clos->arity = arity;
-//     clos->args_received = (int64_t)2;
-//     clos->code = (void *)0;
-//     memset(clos->args, 0, arity * sizeof(void *));
-//     objects[obj_count++] = (uint64_t *)clos;
-//     a_closure();
-//   }
-
-//   print_gc_status();
-
-//   printf("Number : Address %p | Value (as address) %p\n", &number,
-//          (u_int64_t *)*number);
-//   printf("Objects: Address %p | Value (as address) %p\n", &objects,
-//          (u_int64_t *)*objects);
-//   collect();
-//   print_gc_status();
-
-//   destroy_gc();
-//   return 0;
-// }

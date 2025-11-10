@@ -79,6 +79,7 @@ let init_state =
   let info = InfoMap.add "get_heap_fin" (Func ("get_heap_fin", 0)) info in
   let info = InfoMap.add "get_heap_free_size" (Func ("get_heap_free_size", 0)) info in
   let info = InfoMap.add "collect" (Func ("collect", 0)) info in
+  let info = InfoMap.add "print_gc_status" (Func ("print_gc_status", 0)) info in
   let compiled = [] in
   { label_factory; is_start_label_put; a_regs; free_regs; stack; frame; info; compiled }
 ;;

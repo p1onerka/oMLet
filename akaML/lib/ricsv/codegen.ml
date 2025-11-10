@@ -179,7 +179,7 @@ module Emission = struct
     if enable_gc && String.equal name "main"
     then (
       emit call "init_gc";
-      emit mv (A 0) SP;
+      emit mv (A 0) (S 0);
       emit call "set_ptr_stack")
   ;;
 

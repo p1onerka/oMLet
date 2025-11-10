@@ -15,7 +15,7 @@ void print_int(long n) { printf("%ld", TO_ML_INTEGER(n)); }
 
 /* ========== Garbage Collector ========== */
 
-int SIZE_HEAP = 200;
+int SIZE_HEAP = 1500;
 const uint8_t TAG_NUMBER = 0;
 const uint8_t TAG_CLOSURE = 247;
 
@@ -153,14 +153,15 @@ static void process_ptr(is_in_bank_t is_in_bank_cur, uint64_t *ptr) {
 #if !defined(TEST)
   printf("Address %p | Value (as address) %p\n", ptr, (uint64_t *)value);
 #endif
-  if (value == 0 || IS_NOT_PTR(value))
+  if (value == 0 || IS_NOT_PTR(value)) {
     return;
+  }
 
   uint64_t *ptr_cond = (uint64_t *)value;
   if (is_in_bank_cur(ptr_cond) && !GET_MARK(ptr_cond)) {
     uint64_t *obj_sub = copy_object(ptr_cond);
     *ptr = (uint64_t)obj_sub;
-    // update_ptrs(obj_sub);
+    update_ptrs(obj_sub);
   }
 }
 
@@ -170,21 +171,24 @@ static void update_ptrs(uint64_t *obj) {
 
   is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
 
-  for (uint64_t i = 0; i < size; i++)
+  for (uint64_t i = 0; i < size; i++) {
     process_ptr(is_in_bank_cur, &obj[i]);
+  }
 }
 
 static void mark_and_copy(void) {
-  if (PTR_STACK == NULL)
+  if (PTR_STACK == NULL) {
     return;
+  }
 
   is_in_bank_t is_in_bank_cur = GET_IS_IN_BANK(GC);
 
   uint64_t *bottom = PTR_STACK;
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
 
-  for (uint64_t *ptr = top + 1; ptr <= bottom; ptr++)
+  for (uint64_t *ptr = top + 1; ptr <= bottom; ptr++) {
     process_ptr(is_in_bank_cur, ptr);
+  }
 }
 
 void collect(void) {
@@ -265,7 +269,13 @@ closure *alloc_closure(void *func, int64_t arity) {
 closure *copy_closure(const closure *src) {
   size_t size = sizeof(closure) + src->arity * sizeof(void *);
 
-  closure *dst = malloc(size);
+  closure *dst;
+#ifdef ENABLE_GC
+  uint64_t size_words = (size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  dst = (closure *)gc_alloc(size_words, TAG_CLOSURE);
+#else
+  dst = (closure *)malloc(size);
+#endif
   if (!dst) {
     fprintf(stderr, "Closure allocation error\n");
     exit(1);
@@ -284,13 +294,22 @@ void *applyN(closure *f, int64_t argc, ...) {
   va_start(argp, argc);
 
   int64_t n = f_closure->arity;
-  void **args_all = malloc(n * sizeof(void *));
+  void **args_all;
+#ifdef ENABLE_GC
+  uint64_t args_words =
+      (n * sizeof(void *) + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  args_all = (void **)gc_alloc(args_words, TAG_CLOSURE);
+#else
+  args_all = (void **)malloc(n * sizeof(void *));
+#endif
 
-  for (int64_t i = 0; i < f_closure->args_received; i++)
+  for (int64_t i = 0; i < f_closure->args_received; i++) {
     args_all[i] = f_closure->args[i];
+  }
 
-  for (int64_t i = 0; i < argc; i++)
+  for (int64_t i = 0; i < argc; i++) {
     args_all[f_closure->args_received + i] = va_arg(argp, void *);
+  }
 
   va_end(argp);
 
@@ -359,9 +378,10 @@ void *applyN(closure *f, int64_t argc, ...) {
   }
 
   closure *new_closure = copy_closure(f_closure);
-  for (int64_t i = 0; i < argc; i++)
+  for (int64_t i = 0; i < argc; i++) {
     new_closure->args[new_closure->args_received++] =
         args_all[f_closure->args_received + i];
+  }
 
   return new_closure;
 }

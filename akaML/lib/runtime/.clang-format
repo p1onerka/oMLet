@@ -1,6 +1,5 @@
 BasedOnStyle: LLVM
 IndentWidth: 2
-UseSpace: Always
 ColumnLimit: 85
 IndentCaseLabels: true
 IncludeBlocks: Preserve

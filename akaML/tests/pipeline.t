@@ -80,31 +80,31 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
-  Current allocated: 26
-  Free        space: 174
-  Heap         size: 200
+  Current allocated: 73
+  Free        space: 1427
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 26
+  Total   allocated: 73
   GC    collections: 0
-  GC    allocations: 4
+  GC    allocations: 14
   =================
   === GC Status ===
-  Current allocated: 0
-  Free        space: 200
-  Heap         size: 200
+  Current allocated: 5
+  Free        space: 1495
+  Heap         size: 1500
   Current      bank: 1
-  Total   allocated: 26
+  Total   allocated: 73
   GC    collections: 1
-  GC    allocations: 4
+  GC    allocations: 14
   =================
   72024=== GC Status ===
-  Current allocated: 40
-  Free        space: 160
-  Heap         size: 200
+  Current allocated: 122
+  Free        space: 1378
+  Heap         size: 1500
   Current      bank: 1
-  Total   allocated: 66
+  Total   allocated: 190
   GC    collections: 1
-  GC    allocations: 10
+  GC    allocations: 36
   =================
 
   $ ../bin/akaML.exe -gc -fromfile fewtests/02facclos.ml -o 02facclos.s
@@ -113,8 +113,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
   Current allocated: 6
-  Free        space: 194
-  Heap         size: 200
+  Free        space: 1494
+  Heap         size: 1500
   Current      bank: 0
   Total   allocated: 6
   GC    collections: 0
@@ -122,21 +122,21 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   === GC Status ===
   Current allocated: 6
-  Free        space: 194
-  Heap         size: 200
+  Free        space: 1494
+  Heap         size: 1500
   Current      bank: 1
   Total   allocated: 6
   GC    collections: 1
   GC    allocations: 1
   =================
   48=== GC Status ===
-  Current allocated: 0
-  Free        space: 200
-  Heap         size: 200
+  Current allocated: 11
+  Free        space: 1489
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 6
+  Total   allocated: 16
   GC    collections: 2
-  GC    allocations: 2
+  GC    allocations: 4
   =================
 
   $ ../bin/akaML.exe -gc -fromfile fewtests/03clos.ml -o 03clos.s
@@ -145,8 +145,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
   Current allocated: 7
-  Free        space: 193
-  Heap         size: 200
+  Free        space: 1493
+  Heap         size: 1500
   Current      bank: 0
   Total   allocated: 7
   GC    collections: 0
@@ -154,21 +154,21 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   =================
   === GC Status ===
   Current allocated: 7
-  Free        space: 193
-  Heap         size: 200
+  Free        space: 1493
+  Heap         size: 1500
   Current      bank: 1
   Total   allocated: 7
   GC    collections: 1
   GC    allocations: 1
   =================
   === GC Status ===
-  Current allocated: 0
-  Free        space: 200
-  Heap         size: 200
+  Current allocated: 7
+  Free        space: 1493
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 7
+  Total   allocated: 11
   GC    collections: 2
-  GC    allocations: 1
+  GC    allocations: 2
   =================
 
   $ ../bin/akaML.exe -gc -fromfile fewtests/04clos.ml -o 04clos.s
@@ -176,39 +176,39 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
-  Current allocated: 9
-  Free        space: 191
-  Heap         size: 200
+  Current allocated: 24
+  Free        space: 1476
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 9
+  Total   allocated: 24
   GC    collections: 0
-  GC    allocations: 1
+  GC    allocations: 3
   =================
   === GC Status ===
-  Current allocated: 9
-  Free        space: 191
-  Heap         size: 200
+  Current allocated: 39
+  Free        space: 1461
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 9
+  Total   allocated: 39
   GC    collections: 0
-  GC    allocations: 1
+  GC    allocations: 5
   =================
   === GC Status ===
-  Current allocated: 9
-  Free        space: 191
-  Heap         size: 200
-  Current      bank: 0
-  Total   allocated: 9
-  GC    collections: 0
-  GC    allocations: 1
+  Current allocated: 18
+  Free        space: 1482
+  Heap         size: 1500
+  Current      bank: 1
+  Total   allocated: 39
+  GC    collections: 1
+  GC    allocations: 5
   =================
   === GC Status ===
-  Current allocated: 0
-  Free        space: 200
-  Heap         size: 200
+  Current allocated: 18
+  Free        space: 1482
+  Heap         size: 1500
   Current      bank: 0
-  Total   allocated: 9
+  Total   allocated: 45
   GC    collections: 2
-  GC    allocations: 1
+  GC    allocations: 6
   =================
   15

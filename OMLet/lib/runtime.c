@@ -53,8 +53,8 @@ closure *alloc_closure(void *code, int64_t arity) {
   // printf("[alloc_closure] code=%p arity=%ld closure=%p\n",
   //        code, arity, (void *)c);
 
-  printf("alloc closure\n");
-  print_closure(c);
+  // printf("alloc closure\n");
+  // print_closure(c);
   // closure *tagged_c = (closure *)((uintptr_t)c << 1);
   // return tagged_c;
   return c;
@@ -67,8 +67,8 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
 
   // closure *f = (closure *)((uintptr_t)tagged_f >> 1);
   closure *f = tagged_f;
-  printf("apply closure\n");
-  print_closure(f);
+  // printf("apply closure\n");
+  // print_closure(f);
 
   int64_t total = f->received + argc;
 
@@ -76,7 +76,7 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   if (total == f->arity) {
     // printf("i want to alloc %d bytes from full\n", sizeof(void *) *
     // f->arity);
-    void **all_args = malloc(sizeof(void *) * f->arity);
+    void **all_args = omlet_malloc(sizeof(void *) * f->arity, T_UNBOXED);
 
     for (int i = 0; i < f->received; i++)
       all_args[i] = f->args[i];
@@ -97,9 +97,9 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   // print_closure(f);
   closure *partial =
       omlet_malloc(sizeof(closure) + sizeof(void *) * f->arity, T_CLOSURE);
-  printf("partial application : f after malloc\n");
-  print_closure(f);
-  printf("partial application : create new closure\n");
+  // printf("partial application : f after malloc\n");
+  // print_closure(f);
+  // printf("partial application : create new closure\n");
 
   partial->code = f->code;
   partial->arity = f->arity;
@@ -112,7 +112,7 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   for (int i = 0; i < argc; i++)
     partial->args[f->received + i] = args[i];
 
-  print_closure(partial);
+  // print_closure(partial);
   // printf("[apply] partial application: new closure=%p total_received=%ld\n",
   //        (void *)partial, total);
 

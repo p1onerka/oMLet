@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ucontext.h>
-#define HEAP_INIT_SIZE 1000
+#define HEAP_INIT_SIZE 5000
 #include <stdbool.h>
 
 typedef uint8_t tag_t;
@@ -85,10 +85,10 @@ void init_heap(size_t size) {
   heap_to.offset = 0;
 
   cur_heap_ptr = &heap_from;
-  printf("heap_from: %p .. %p\n", (void *)heap_from.start,
-         (void *)(heap_from.start + heap_from.size));
-  printf("heap_to:   %p .. %p\n", (void *)heap_to.start,
-         (void *)(heap_to.start + heap_to.size));
+  // printf("heap_from: %p .. %p\n", (void *)heap_from.start,
+  //        (void *)(heap_from.start + heap_from.size));
+  // printf("heap_to:   %p .. %p\n", (void *)heap_to.start,
+  //        (void *)(heap_to.start + heap_to.size));
   // printf("cur_heap_ptr init: %p\n", (void *)cur_heap_ptr->start);
 }
 
@@ -171,7 +171,7 @@ static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
   // copy payload
   if (old_hdr->tag == T_CLOSURE) {
     // printf("tag1 %d\n", old_hdr->tag);
-    // printf("wooow\n");
+    printf("wooow\n");
     for (uint16_t i = 0; i < old_hdr->size; i++) {
       // printf("tag2 %d\n", old_hdr->tag);
       // printf("[COPY WORD] old_obj[%u]=%p\n", i, (void *)obj[i]);
@@ -240,8 +240,8 @@ static void mark_and_copy(omletHeap_t *from_heap, omletHeap_t *to_heap) {
 
   // omletHeap_t *from_heap = (cur_heap_ptr == &heap_from) ? &heap_to :
   // &heap_from; omletHeap_t *to_heap = cur_heap_ptr;
-  printf("from_heap: %p\n to_heap: %p\n", (void *)from_heap->start,
-         (void *)to_heap->start);
+  // printf("from_heap: %p\n to_heap: %p\n", (void *)from_heap->start,
+  //        (void *)to_heap->start);
 
   for (uint64_t **ptr = stack_top; ptr <= stack_bottom; ptr++) {
     // printf("hello %p", *ptr);
@@ -281,13 +281,14 @@ void *omlet_malloc(size_t size, tag_t tag) {
   if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
     collect(); // run GC
 
-    // printf("size1 %zu\n", cur_heap_ptr->offset + total_size);
-    // printf("size2 %zu\n", cur_heap_ptr->size);
+    printf("size1 %zu\n", cur_heap_ptr->offset + total_size);
+    printf("size2 %zu\n", cur_heap_ptr->size);
     if (cur_heap_ptr->offset + total_size > cur_heap_ptr->size) {
       fprintf(stderr, "Out of memory in omlet_malloc\n");
       exit(1);
     }
   }
+  // printf("meow\n");
   uint8_t *ptr = cur_heap_ptr->start + cur_heap_ptr->offset;
   cur_heap_ptr->offset += total_size;
   box_header_t *header = (box_header_t *)ptr;

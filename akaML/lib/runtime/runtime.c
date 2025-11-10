@@ -9,7 +9,9 @@
 #include <string.h>
 #include <unistd.h>
 
-void print_int(long n) { printf("%ld", n); }
+#define TO_ML_INTEGER(n) ((uint64_t)((uint64_t)(n) >> 1))
+
+void print_int(long n) { printf("%ld", TO_ML_INTEGER(n)); }
 
 /* ========== Garbage Collector ========== */
 
@@ -28,7 +30,7 @@ const uint8_t TAG_CLOSURE = 247;
 #define GET_SIZE(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_SIZE) & 0x3FFF)
 #define GET_MARK(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_MARK) & 0x1)
 #define GET_TAG(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_TAG) & 0xFF)
-#define IS_NOT_PTR(ptr) (*((uint64_t *)(ptr)) & 0x7)
+#define IS_NOT_PTR(value) (value & 0x7)
 
 typedef struct {
   uint64_t words_allocated_total;
@@ -145,14 +147,16 @@ static uint64_t *copy_object(uint64_t *obj) {
 static void update_ptrs(uint64_t *obj);
 
 static void process_ptr(is_in_bank_t is_in_bank_cur, uint64_t *ptr) {
-  uint64_t *ptr_cond = (uint64_t *)*ptr;
-  if (ptr_cond == NULL)
+  uint64_t value = *ptr;
+  // printf("Address %p | Value (as address) %p\n", ptr, (uint64_t *)value);
+  if (value == 0 || IS_NOT_PTR(value))
     return;
 
+  uint64_t *ptr_cond = (uint64_t *)value;
   if (is_in_bank_cur(ptr_cond) && !GET_MARK(ptr_cond)) {
     uint64_t *obj_sub = copy_object(ptr_cond);
     *ptr = (uint64_t)obj_sub;
-    update_ptrs(obj_sub);
+    // update_ptrs(obj_sub);
   }
 }
 
@@ -175,7 +179,7 @@ static void mark_and_copy(void) {
   uint64_t *bottom = PTR_STACK;
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
 
-  for (uint64_t *ptr = top; ptr <= bottom; ptr++)
+  for (uint64_t *ptr = top + 1; ptr <= bottom; ptr++)
     process_ptr(is_in_bank_cur, ptr);
 }
 
@@ -308,10 +312,10 @@ void *applyN(closure *f, int64_t argc, ...) {
         "li   t4, 0\n"
         "el1:\n"
         "beq  t4, t3, en1\n"
-        "slli t5, t4, 3\n"  /* offset = i * 8 */
-        "add  t6, t2, t5\n" /* addr = &stack_args[i] */
-        "ld   t0, 0(t6)\n"  /* t0 = stack_args[i] */
-        "sd   t0, 0(t1)\n"  /* store on stack */
+        "slli t5, t4, 3\n" /* offset = i * 8 */
+        "add t6, t2, t5\n" /* addr = &stack_args[i] */
+        "ld   t0, 0(t6)\n" /* t0 = stack_args[i] */
+        "sd   t0, 0(t1)\n" /* store on stack */
         "addi t1, t1, 8\n"
         "addi t4, t4, 1\n"
         "j el1\n"
@@ -333,7 +337,7 @@ void *applyN(closure *f, int64_t argc, ...) {
 
         /* restore the stack */
         "mv   t0, %[stack_bytes]\n"
-        "add  sp, sp, t0\n"
+        "add sp, sp, t0\n"
 
         /* return the result to a variable */
         "mv   %[ret], a0\n"
@@ -401,6 +405,10 @@ void *applyN(closure *f, int64_t argc, ...) {
 
 //   print_gc_status();
 
+//   printf("Number : Address %p | Value (as address) %p\n", &number,
+//          (u_int64_t *)*number);
+//   printf("Objects: Address %p | Value (as address) %p\n", &objects,
+//          (u_int64_t *)*objects);
 //   collect();
 //   print_gc_status();
 

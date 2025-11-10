@@ -100,9 +100,23 @@ module Emission = struct
 
   let emit_bin_op dst op r1 r2 =
     match op with
-    | "+" -> return @@ emit add dst r1 r2
-    | "-" -> return @@ emit sub dst r1 r2
-    | "*" -> return @@ emit mul dst r1 r2
+    | "+" ->
+      return
+      @@
+      (emit add dst r1 r2;
+       emit addi dst dst (-1))
+    | "-" ->
+      return
+      @@
+      (emit sub dst r1 r2;
+       emit addi dst dst 1)
+    | "*" ->
+      return
+      @@
+      (emit srli r1 r1 1;
+       emit addi r2 r2 (-1);
+       emit mul dst r1 r2;
+       emit addi dst dst 1)
     | "<=" ->
       emit slt dst r2 r1;
       return @@ emit xori dst dst 1
@@ -213,7 +227,7 @@ let ensure_reg_free env dst =
 
 let rec gen_i_exp env dst = function
   | IExp_constant (Const_integer n) ->
-    emit li dst n;
+    emit li dst (to_tag_integer n);
     return env
   | IExp_ident x ->
     (match Map.find env x with

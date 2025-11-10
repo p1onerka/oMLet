@@ -113,8 +113,11 @@ static inline bool on_cur_heap(uint64_t *ptr) {
 static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
                              omletHeap_t *to_heap) {
   box_header_t *old_hdr = get_header(obj);
+  printf("[COPY START] obj=%p, size=%u, tag=%d, color=%d\n", (void *)obj,
+         old_hdr->size, old_hdr->tag, old_hdr->color);
 
   if (old_hdr->color == COLOR_MARKED) {
+    printf("[COPY SKIP] Already marked\n");
     return obj; // pointer already updated elsewhere
   }
 
@@ -132,11 +135,13 @@ static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
   *new_hdr = *old_hdr;
 
   uint64_t *new_obj = (uint64_t *)(new_hdr + 1);
+  printf("[COPY PAYLOAD] new_obj=%p\n", (void *)new_obj);
 
   // copy payload
   if (old_hdr->tag == T_CLOSURE) {
     printf("wooow\n");
     for (uint16_t i = 0; i < old_hdr->size; i++) {
+      printf("[COPY WORD] old_obj[%u]=%p\n", i, (void *)obj[i]);
       new_obj[i] = obj[i];
     }
   } else {
@@ -160,6 +165,8 @@ static void update_pointers(uint64_t *obj, omletHeap_t *from_heap,
 
   for (uint16_t i = 0; i < hdr->size; i++) {
     uint64_t *field_ptr = (uint64_t *)obj[i];
+    printf("[UPDATE_PTRS] obj=%p, index=%u, field_ptr=%p\n", (void *)obj, i,
+           (void *)field_ptr);
 
     if (!on_cur_heap(field_ptr)) {
       // printf("not on heap\n");

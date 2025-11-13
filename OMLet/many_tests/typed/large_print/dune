@@ -6,8 +6,6 @@
   ../../../lib/runtime.c
   ../../../lib/gc.c
   ../../../lib/gc.h
-  ../../../lib/boxing.c
-  ../../../lib/boxing.h
   ../../../lib/callf.s
   ../build_and_run.sh))
 

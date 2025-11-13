@@ -33,33 +33,6 @@ typedef struct {
   uint32_t pad;  // alignment
 } box_header_t;
 
-void print_box_header(const box_header_t *hdr) {
-  if (!hdr) {
-    printf("<box_header: NULL>\n");
-    return;
-  }
-
-  printf("Box header at %p:\n", (void *)hdr);
-  printf("  tag   = %d", hdr->tag);
-  switch (hdr->tag) {
-  case T_CLOSURE:
-    printf(" (T_CLOSURE)\n");
-    break;
-  case T_UNBOXED:
-    printf(" (T_UNBOXED)\n");
-    break;
-  default:
-    printf(" (UNKNOWN)\n");
-    break;
-  }
-  printf("  color = %d (%s)\n", hdr->color,
-         hdr->color == COLOR_MARKED ? "MARKED" : "UNMARKED");
-  printf("  size  = %u words (%lu bytes)\n", hdr->size,
-         (unsigned long)(hdr->size * sizeof(uint64_t)));
-  printf("  pad   = 0x%x\n", hdr->pad);
-  printf("----------------------------------------\n");
-}
-
 typedef struct {
   uint8_t *start;
   size_t size;
@@ -105,9 +78,7 @@ void init_start_heap() {
   init_heap(HEAP_SIZE);
 }
 
-void free_heap() {
-  // free(cur_heap_ptr->start);
-}
+void free_heap() { free(cur_heap_ptr->start); }
 
 uintptr_t get_heap_start() { return ((uintptr_t)cur_heap_ptr->start << 1) + 1; }
 
@@ -176,13 +147,11 @@ static void update_pointers(uint64_t *obj, omletHeap_t *from_heap,
     if (!on_heap(field_ptr, from_heap)) {
       continue;
     }
-
     box_header_t *field_hdr = get_header(field_ptr);
     if (field_hdr->color == COLOR_MARKED) {
       continue;
     }
     uint64_t *copied_obj = copy_object(field_ptr, from_heap, to_heap);
-
     obj[i] = (uint64_t)copied_obj;
 
     update_pointers(copied_obj, from_heap, to_heap);

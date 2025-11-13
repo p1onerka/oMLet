@@ -1,4 +1,3 @@
-#include "boxing.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -10,7 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ucontext.h>
-#define HEAP_INIT_SIZE 1000
+#ifndef HEAP_SIZE
+#define HEAP_SIZE 1000
+#endif
 #include <stdbool.h>
 
 typedef uint8_t tag_t;
@@ -101,7 +102,7 @@ uint64_t **stack_top;
 
 void init_start_heap() {
   stack_bottom = get_current_sp();
-  init_heap(HEAP_INIT_SIZE);
+  init_heap(HEAP_SIZE);
 }
 
 void free_heap() {

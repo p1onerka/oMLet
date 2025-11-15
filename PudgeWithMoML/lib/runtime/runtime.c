@@ -6,16 +6,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if false
+#ifdef DEBUG
 #define LOG(fmt, ...)                                                                                                  \
-  {                                                                                                                    \
+  do {                                                                                                                 \
     printf(fmt, ##__VA_ARGS__);                                                                                        \
     fflush(stdout);                                                                                                    \
-  }
-#define LOGF(fun) fun
+  } while (0)
+
+#define LOGF(stmt)                                                                                                     \
+  do {                                                                                                                 \
+    stmt;                                                                                                              \
+  } while (0)
 #else
 #define LOG(fmt, ...) ((void)0)
-#define LOGF(fun) ((void)0)
+#define LOGF(stmt) ((void)0)
 #endif
 
 #define LOAD_VARARGS(args, argc)                                                                                       \
@@ -28,16 +32,23 @@
     va_end(list);                                                                                                      \
   } while (0)
 
-extern void *call_closure(void *code, uint64_t argc, void **argv);
-extern void *__start_global_vars[];
-extern void *__stop_global_vars[];
+#ifdef DEBUG
+static void print_stack(void *current_sp) {
+  printf("=== STACK status ===\n");
+  printf("BASE_SP: %p, CURRENT_SP: %p\n", gc.base_sp, current_sp);
+  size_t stack_size = (gc.base_sp - current_sp) / 8;
+  printf("STACK SIZE: %ld\n", stack_size);
 
-void print_int(size_t n) {
-  n >>= 1;
-  printf("%d\n", n);
+  for (size_t i = 0; i < stack_size; i++) {
+    uint64_t *byte = (uint64_t *)gc.base_sp - i;
+    printf("\t%p: 0x%lx\n", byte, *byte);
+  }
+
+  printf("=== STACK status ===\n");
+
+  return;
 }
-
-void flush() { fflush(stdout); }
+#endif
 
 // New and old space size in words.
 #define SPACE_MINIMUM_SIZE (8192)
@@ -61,6 +72,17 @@ void flush() { fflush(stdout); }
 // ...   ....       [..data]
 // N_0 + (N_2 - 1): [data]
 
+extern void *call_closure(void *code, uint64_t argc, void **argv);
+extern void *__start_global_vars[];
+extern void *__stop_global_vars[];
+
+static void *_apply_closure_chain(closure *clos, uint8_t argc, void **new_args);
+static void *_apply_closure(closure *old_clos, uint8_t argc, void **new_args);
+static void *_alloc_closure(void *f, uint8_t argc);
+static void update_stack_data_ptrs(void *current_sp, void *old, void *new);
+
+void flush() { fflush(stdout); }
+
 typedef struct {
   void *base_sp;
   size_t space_capacity; // current space size in words
@@ -83,9 +105,10 @@ struct closure {
   void *args[];
 };
 
-static void print_stack(void *current_sp);
-static void *_apply_closure_chain(closure *clos, uint8_t argc, void **new_args);
-static void *_apply_closure(closure *old_clos, uint8_t argc, void **new_args);
+void print_int(int64_t n) {
+  n >>= 1;
+  printf("%ld\n", n);
+}
 
 static void _print_gc_stats() {
   printf("Heap Info:\n");
@@ -122,12 +145,12 @@ void print_gc_status() {
       addr = ((void **)GC_HEAP_OFFSET) + SPACE_MINIMUM_SIZE + offset;
     }
 
-    printf("\t(0x%x) 0x%x: [size: %ld]\n", addr, offset, size);
+    printf("\t(%p) 0x%zx: [size: %ld]\n", addr, offset, size);
     offset++;
 
     for (size_t i = 0; i < size; i++) {
-      printf("\t(0x%x) 0x%x: ", addr + i + 1, offset);
-      printf("[data: 0x%x]\n", gc.new_space[offset]);
+      printf("\t(%p) 0x%zx: ", addr + i + 1, offset);
+      printf("[data: %p]\n", gc.new_space[offset]);
       offset++;
     }
   }
@@ -149,22 +172,6 @@ void init_GC(void *base_sp) {
   gc.heap_start = heap;
   gc.alloc_offset = 0;
   gc.old_space = heap + SPACE_MINIMUM_SIZE;
-
-  return;
-}
-
-static void print_stack(void *current_sp) {
-  printf("=== STACK status ===\n");
-  printf("BASE_SP: 0x%x, CURRENT_SP: 0x%x\n", gc.base_sp, current_sp);
-  size_t stack_size = (gc.base_sp - current_sp) / 8;
-  printf("STACK SIZE: %ld\n", stack_size);
-
-  for (size_t i = 0; i < stack_size; i++) {
-    uint64_t *byte = (uint64_t *)gc.base_sp - i;
-    printf("\t0x%x: 0x%x\n", byte, *byte);
-  }
-
-  printf("=== STACK status ===\n");
 
   return;
 }
@@ -432,7 +439,7 @@ void **get_heap_fin() {
   return result;
 }
 
-void *_alloc_closure(void *f, uint8_t argc) {
+static void *_alloc_closure(void *f, uint8_t argc) {
   LOG("[DEBUG] %s(f: 0x%x, argc: %d)\n", __func__, f, argc);
   closure *clos = my_malloc(sizeof(closure) + sizeof(void *) * argc);
 

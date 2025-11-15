@@ -23,18 +23,21 @@ coverage:
 input ?=
 opts ?=
 LDFLAGS =
+CFLAGS = -Wall -Wextra \
+         -march=rv64gc
+ASFLAGS = -march=rv64gc
 
 ifeq ($(FIXADDR),1)
   LDFLAGS += -no-pie -Wl,-Ttext=0x400000
 endif
 
-compile: 
-	@riscv64-linux-gnu-gcc -S -march=rv64gc lib/runtime/runtime.c -o runtime.s
+compile:
+	@riscv64-linux-gnu-gcc $(CFLAGS) -S lib/runtime/runtime.c -o runtime.s
 	@dune exec compiler -- $(if $(input),-fromfile=$(input)) $(opts) -o main.s
 
-	@riscv64-linux-gnu-as -march=rv64gc main.s -o main.o
-	@riscv64-linux-gnu-as -march=rv64gc runtime.s -o runtime.o
-	@riscv64-linux-gnu-as -march=rv64gc lib/runtime/call_closure.s -o call_closure.o
-	@riscv64-linux-gnu-as -march=rv64gc lib/runtime/load_gp.s -o load_gp.o
+	@riscv64-linux-gnu-as $(ASFLAGS) main.s -o main.o
+	@riscv64-linux-gnu-as $(ASFLAGS) runtime.s -o runtime.o
+	@riscv64-linux-gnu-as $(ASFLAGS) lib/runtime/call_closure.s -o call_closure.o
+	@riscv64-linux-gnu-as $(ASFLAGS) lib/runtime/load_gp.s -o load_gp.o
 
-	@riscv64-linux-gnu-gcc $(LDFLAGS) -nostartfiles main.o runtime.o call_closure.o load_gp.o -o main.exe
+	@riscv64-linux-gnu-gcc $(CFLAGS) $(LDFLAGS) -nostartfiles main.o runtime.o call_closure.o load_gp.o -o main.exe

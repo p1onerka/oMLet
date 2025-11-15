@@ -8,6 +8,9 @@
 
 typedef struct closure closure;
 
+void print_int(int64_t n);
+void flush();
+
 // Alloc space for GC, init initial state
 void init_GC(void *base_sp);
 void gc_collect();

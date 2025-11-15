@@ -75,7 +75,7 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   8
 
-  $ ../bin/akaML.exe -gc -fromfile fewtests/01faccps.ml -o 01faccps.s
+  $ ../bin/akaML.exe -gc -fromfile fewtests/closure/01faccps.ml -o 01faccps.s
   $ riscv64-linux-gnu-as -march=rv64gc 01faccps.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
@@ -97,18 +97,10 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    collections: 1
   GC    allocations: 14
   =================
-  72024=== GC Status ===
-  Current allocated: 332
-  Free        space: 1468
-  Heap         size: 1800
-  Current      bank: 1
-  Total   allocated: 526
-  GC    collections: 1
-  GC    allocations: 36
-  =================
+  24
 
-  $ ../bin/akaML.exe -gc -fromfile fewtests/02facclos.ml -o 02facclos.s
-  $ riscv64-linux-gnu-as -march=rv64gc 02facclos.s -o temp.o
+  $ ../bin/akaML.exe -gc -fromfile fewtests/closure/02fac.ml -o 02fac.s
+  $ riscv64-linux-gnu-as -march=rv64gc 02fac.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
@@ -139,8 +131,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    allocations: 4
   =================
 
-  $ ../bin/akaML.exe -gc -fromfile fewtests/03clos.ml -o 03clos.s
-  $ riscv64-linux-gnu-as -march=rv64gc 03clos.s -o temp.o
+  $ ../bin/akaML.exe -gc -fromfile fewtests/closure/03adder.ml -o 03adder.s
+  $ riscv64-linux-gnu-as -march=rv64gc 03adder.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
@@ -171,8 +163,8 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    allocations: 2
   =================
 
-  $ ../bin/akaML.exe -gc -fromfile fewtests/04clos.ml -o 04clos.s
-  $ riscv64-linux-gnu-as -march=rv64gc 04clos.s -o temp.o
+  $ ../bin/akaML.exe -gc -fromfile fewtests/closure/04plusss.ml -o 04plusss.s
+  $ riscv64-linux-gnu-as -march=rv64gc 04plusss.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   === GC Status ===
@@ -212,3 +204,26 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    allocations: 6
   =================
   15
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/closure/05fibcps.ml -o 05fibcps.s
+  $ riscv64-linux-gnu-as -march=rv64gc 05fibcps.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  8=== GC Status ===
+  Current allocated: 1543
+  Free        space: 257
+  Heap         size: 1800
+  Current      bank: 0
+  Total   allocated: 1543
+  GC    collections: 0
+  GC    allocations: 98
+  =================
+  8=== GC Status ===
+  Current allocated: 1617
+  Free        space: 183
+  Heap         size: 1800
+  Current      bank: 1
+  Total   allocated: 3086
+  GC    collections: 1
+  GC    allocations: 196
+  =================

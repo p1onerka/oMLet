@@ -25,10 +25,11 @@
  (applies_to dparsetree inference codegen anf pipeline)
  (deps
   ../bin/akaML.exe
-  fewtests/01faccps.ml
-  fewtests/02facclos.ml
-  fewtests/03clos.ml
-  fewtests/04clos.ml
+  fewtests/closure/01faccps.ml
+  fewtests/closure/02fac.ml
+  fewtests/closure/03adder.ml
+  fewtests/closure/04plusss.ml
+  fewtests/closure/05fibcps.ml
   manytests/do_not_type/001.ml
   manytests/do_not_type/002if.ml
   manytests/do_not_type/003occurs.ml

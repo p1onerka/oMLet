@@ -191,7 +191,7 @@ let rec anf_exp exp k =
         (pat :: pat_list)
     in
     return folded
-  | Exp_construct ("()", None) -> k @@ IExp_unit
+  | Exp_construct ("()", None) -> k IExp_unit
   | _ -> fail "Exp: Not implemented"
 ;;
 

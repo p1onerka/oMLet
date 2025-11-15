@@ -14,7 +14,15 @@
  (targets rv64_gc_runtime.o)
  (deps runtime.c)
  (action
-  (run riscv64-linux-gnu-gcc -DENABLE_GC -DTEST -march=rv64gc -c %{deps} -o %{targets})))
+  (run
+   riscv64-linux-gnu-gcc
+   -DENABLE_GC
+   -DTEST
+   -march=rv64gc
+   -c
+   %{deps}
+   -o
+   %{targets})))
 
 (rule
  (targets rv64_gc_runtime.a)

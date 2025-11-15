@@ -462,9 +462,9 @@ let codegen_astatement astmt =
         let* () = update_is_start_label_put true in
         let* () = add_instr (True (Label start_label)) in
         let* () = add_instr (Pseudo (MV (Fp, Sp))) in
-        let* () = add_instr (True (IType (ADDI, Sp, Sp, -required_stack_size))) in
+        let* () = add_instr (True (IType (ADDI, Sp, Sp, Num (-required_stack_size)))) in
         (* initialize s11 with 0 for further saving return value into it *)
-        let* () = add_instr (Pseudo (LI (Saved 11, 0))) in
+        let* () = add_instr (Pseudo (LI (Saved 11, Num 0))) in
         let* () = add_instr (Pseudo (CALL "init_start_heap")) in
         return true
     in

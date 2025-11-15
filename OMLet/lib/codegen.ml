@@ -78,6 +78,7 @@ let init_state =
   let info = InfoMap.add "get_heap_start" (Func ("get_heap_start", 0)) info in
   let info = InfoMap.add "get_heap_fin" (Func ("get_heap_fin", 0)) info in
   let info = InfoMap.add "get_heap_free_size" (Func ("get_heap_free_size", 0)) info in
+  let info = InfoMap.add "collect" (Func ("collect", 0)) info in
   let compiled = [] in
   { label_factory; is_start_label_put; a_regs; free_regs; stack; frame; info; compiled }
 ;;
@@ -185,8 +186,8 @@ let codegen_immexpr immexpr =
        let is_local_variable =
          is_inside_function_body && is_not_frame_start && not is_arg
        in
-       let space_for_ra = 8 in
-       let space_for_old_fp = 8 in
+       let space_for_ra = if state.is_start_label_put then 0 else 8 in
+       let space_for_old_fp = if state.is_start_label_put then 0 else 8 in
        let remaining_frame_offset = space_for_ra + space_for_old_fp + o in
        let reg = if is_inside_function_body then Fp else Sp in
        let o = if is_local_variable then -remaining_frame_offset else o in
@@ -401,8 +402,8 @@ and codegen_aexpr = function
     let new_info = InfoMap.add name (Var (cur_offset, Local)) state.info in
     let* () = update_info new_info in
     let is_not_frame_start = cur_offset <> 0 in
-    let space_for_ra = 8 in
-    let space_for_old_fp = 8 in
+    let space_for_ra = if state.is_start_label_put then 0 else 8 in
+    let space_for_old_fp = if state.is_start_label_put then 0 else 8 in
     let remaining_frame_offset = space_for_ra + space_for_old_fp + cur_offset in
     let cur_offset = if is_not_frame_start then -remaining_frame_offset else cur_offset in
     let* () =

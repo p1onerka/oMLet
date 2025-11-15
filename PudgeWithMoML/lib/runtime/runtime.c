@@ -152,7 +152,12 @@ void print_gc_status() {
 
     for (size_t i = 0; i < size; i++) {
       printf("\t(%p) 0x%zx: ", addr + i + 1, offset);
-      printf("[data: %p]\n", gc.new_space[offset]);
+      void *data = gc.new_space[offset];
+      if (data >= (void *)gc.new_space && data < (void *)(gc.new_space + gc.alloc_offset)) {
+        size_t word_offset = ((void **)data) - gc.heap_start;
+        data = (void **)(GC_HEAP_OFFSET) + word_offset;
+      }
+      printf("[data: %p]\n", data);
       offset++;
     }
   }

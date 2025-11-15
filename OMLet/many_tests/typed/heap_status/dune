@@ -1,0 +1,10 @@
+(cram
+ (applies_to heap_bounds)
+ (deps
+  ../../../repl/repl.exe
+  ../../../lib/runtime.c
+  ../../../lib/gc.c
+  ../../../lib/gc.h
+  ../../../lib/callf.s
+  ../build_and_run.sh
+  heap_bounds.ml))

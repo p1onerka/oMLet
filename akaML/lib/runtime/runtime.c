@@ -179,25 +179,25 @@ static void update_ptr_on_stack(uint64_t *ptr_old, uint64_t *ptr_sub) {
   }
 }
 
-static void process_ptr(uint64_t *ptr);
+static void mark_and_copy(uint64_t *ptr);
 
 static void update_args(uint64_t *ptr) {
   int step = get_step_to_header(ptr);
   if (step <= 0) {
     return;
   } else if (step < 3) {
-    process_ptr(ptr);
+    mark_and_copy(ptr);
   } else {
     uint64_t *header = ptr - step;
     const uint64_t size = GET_SIZE(header);
 
     for (uint64_t i = 2; i < size; i++) {
-      process_ptr(header + i);
+      mark_and_copy(header + i);
     }
   }
 }
 
-static void process_ptr(uint64_t *ptr) {
+static void mark_and_copy(uint64_t *ptr) {
   uint64_t value = *ptr;
   if (value == 0 || IS_NOT_PTR(value)) {
     return;
@@ -214,25 +214,22 @@ static void process_ptr(uint64_t *ptr) {
   }
 }
 
-static void mark_and_copy(void) {
-  if (PTR_STACK == NULL) {
-    return;
-  }
-
+void collect(void) {
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
   uint64_t *bottom = PTR_STACK;
 
-  for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
-    process_ptr(ptr);
+  if (bottom == NULL || top == NULL || top > bottom) {
+    return;
   }
-}
 
-void collect(void) {
   GC.stats.bank_current = 1 - GC.stats.bank_current;
   uint64_t *bank_start = GET_BANK_START(GC);
   GC.ptr_base = bank_start;
 
-  mark_and_copy();
+  for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
+    mark_and_copy(ptr);
+  }
+
   GC.stats.collections_count++;
 }
 

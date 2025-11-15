@@ -19,16 +19,13 @@ int SIZE_HEAP = 1800;
 const uint8_t TAG_NUMBER = 0;
 const uint8_t TAG_CLOSURE = 247;
 
-// [63-49: size] [48: mark] [47-40: tag] [39-0: value]
+// [63-49: size] [48-41: tag] [40-0: value]
 #define SHIFT_SIZE 49
-#define SHIFT_MARK 48
-#define SHIFT_TAG 40
+#define SHIFT_TAG 41
 
-#define SET_HEADER(size, mark, tag)                                                 \
-  ((uint64_t)(((uint64_t)(size) << SHIFT_SIZE) | ((uint64_t)(mark) << SHIFT_MARK) | \
-              ((uint64_t)(tag) << SHIFT_TAG)))
+#define SET_HEADER(size, tag)                                                       \
+  ((uint64_t)(((uint64_t)(size) << SHIFT_SIZE) | ((uint64_t)(tag) << SHIFT_TAG)))
 #define GET_SIZE(ptr) ((*(uint64_t *)(ptr) >> SHIFT_SIZE) & 0x3FFF)
-#define GET_MARK(ptr) ((*(uint64_t *)(ptr) >> SHIFT_MARK) & 0x1)
 #define GET_TAG(ptr) ((*(uint64_t *)(ptr) >> SHIFT_TAG) & 0xFF)
 #define IS_HEADER(value) (!((value) & 0xFFFFFFFFFF))
 #define IS_NOT_PTR(value) (value & 0x7)
@@ -46,7 +43,6 @@ typedef struct {
   uint64_t *start_bank_sub;
   uint64_t *final_bank_sub;
   uint64_t *ptr_base;
-  uint64_t words_allocated_current;
   gc_stats stats;
 } gc_data;
 
@@ -56,7 +52,6 @@ static gc_data GC = {
     .start_bank_sub = NULL,
     .final_bank_sub = NULL,
     .ptr_base = NULL,
-    .words_allocated_current = 0,
     .stats = {.words_allocated_total = 0,
               .bank_current = 0,
               .collections_count = 0,
@@ -71,7 +66,6 @@ void init_gc(void) {
   GC.final_bank_sub = GC.start_bank_sub + SIZE_HEAP;
 
   GC.ptr_base = GC.start_bank_main;
-  GC.words_allocated_current = 0;
   GC.stats.bank_current = 0;
   GC.stats.words_allocated_total = 0;
   GC.stats.collections_count = 0;
@@ -105,7 +99,7 @@ uint64_t get_heap_final(void) { return (uint64_t)GET_BANK_FINAL(GC); }
 
 void print_gc_status(void) {
   printf("=== GC Status ===\n");
-  printf("Current allocated: %lu\n", GC.words_allocated_current);
+  printf("Current allocated: %lu\n", GC.ptr_base - GET_BANK_START(GC));
   printf("Free        space: %ld\n", GET_BANK_FINAL(GC) - GC.ptr_base);
   printf("Heap         size: %d\n", SIZE_HEAP);
 #if !defined(TEST)
@@ -124,44 +118,41 @@ void print_gc_status(void) {
 static uint64_t *PTR_STACK = NULL;
 void set_ptr_stack(uint64_t *ptr_stack) { PTR_STACK = ptr_stack; }
 
-static uint64_t *get_header(uint64_t *obj, int is_in_old) {
-  uint64_t *ptr = obj;
-
-  is_in_bank_t is_in_bank =
-      (is_in_old == 1 ? GET_IS_IN_BANK_OLD(GC) : GET_IS_IN_BANK_CUR(GC));
-
-  while (ptr != NULL && is_in_bank(ptr)) {
+static uint64_t *get_header(uint64_t *obj) {
+  is_in_bank_t is_in_bank = GET_IS_IN_BANK_OLD(GC);
+  for (uint64_t *ptr = obj; ptr != NULL && is_in_bank(ptr); ptr--) {
     if (IS_HEADER(*ptr)) {
       return ptr;
     }
-    ptr--;
   }
 
-  return NULL;
+  fprintf(stderr, "Incorrectly created header or it doesn't exist\n");
+  destroy_gc();
+  exit(1);
+}
+
+static int get_step_to_header(uint64_t *obj) {
+  is_in_bank_t is_in_bank = GET_IS_IN_BANK_CUR(GC);
+  for (uint64_t *ptr = obj; ptr != NULL && is_in_bank(ptr); ptr--) {
+    if (IS_HEADER(*ptr)) {
+      return (int)(obj - ptr);
+    }
+  }
+  return -1;
 }
 
 static uint64_t *copy_object(uint64_t *obj) {
-  uint64_t *header = get_header(obj, 1);
-  if (header == NULL) {
-    fprintf(stderr, "Incorrect header\n");
-    exit(1);
-  }
-
-  if (GET_MARK(header)) {
-  }
-
+  uint64_t *header = get_header(obj);
   const uint64_t size = GET_SIZE(header);
   const uint64_t tag = GET_TAG(header);
   const uint64_t offset = size + 1;
 
   if (GC.ptr_base + offset > GET_BANK_FINAL(GC)) {
-    print_gc_status();
-    printf("offset, obj: %lu %p\n", offset, obj);
     fprintf(stderr, "Out of memory during GC\n");
     exit(1);
   }
 
-  *(GC.ptr_base) = SET_HEADER(size, 0x0, tag);
+  *(GC.ptr_base) = SET_HEADER(size, tag);
   uint64_t *obj_sub = GC.ptr_base + 1;
 
   if (tag == TAG_CLOSURE) {
@@ -172,13 +163,39 @@ static uint64_t *copy_object(uint64_t *obj) {
     memcpy(obj_sub, obj, size * sizeof(uint64_t));
   }
 
-  *header = SET_HEADER(size, 0x1, tag);
   GC.ptr_base += offset;
-
   return obj_sub;
 }
 
-static void update_ptrs(uint64_t *obj);
+static void update_ptr_on_stack(uint64_t *ptr_old, uint64_t *ptr_sub) {
+  uint64_t value_old = *ptr_old;
+  uint64_t *bottom = PTR_STACK;
+
+  for (uint64_t *ptr = ptr_old + 1; ptr <= PTR_STACK; ptr++) {
+    uint64_t value = *ptr;
+    if (value != 0 && value == value_old) {
+      *ptr = (uint64_t)ptr_sub;
+    }
+  }
+}
+
+static void process_ptr(uint64_t *ptr);
+
+static void update_args(uint64_t *ptr) {
+  int step = get_step_to_header(ptr);
+  if (step <= 0) {
+    return;
+  } else if (step < 3) {
+    process_ptr(ptr);
+  } else {
+    uint64_t *header = ptr - step;
+    const uint64_t size = GET_SIZE(header);
+
+    for (uint64_t i = 2; i < size; i++) {
+      process_ptr(header + i);
+    }
+  }
+}
 
 static void process_ptr(uint64_t *ptr) {
   uint64_t value = *ptr;
@@ -186,24 +203,14 @@ static void process_ptr(uint64_t *ptr) {
     return;
   }
 
-  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK_OLD(GC);
+  is_in_bank_t is_in_bank = GET_IS_IN_BANK_OLD(GC);
   uint64_t *ptr_cond = (uint64_t *)value;
 
-  if (is_in_bank_old(ptr_cond) && !GET_MARK(ptr_cond)) {
+  if (is_in_bank(ptr_cond)) {
     uint64_t *obj_sub = copy_object(ptr_cond);
+    update_ptr_on_stack(ptr, obj_sub);
+    update_args(obj_sub);
     *ptr = (uint64_t)obj_sub;
-    update_ptrs(obj_sub);
-  }
-}
-
-static void update_ptrs(uint64_t *obj) {
-  const uint64_t size = GET_SIZE(obj);
-  const uint64_t tag = GET_TAG(obj);
-
-  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK_OLD(GC);
-
-  for (uint64_t i = 0; i < size; i++) {
-    process_ptr(&obj[i]);
   }
 }
 
@@ -212,8 +219,8 @@ static void mark_and_copy(void) {
     return;
   }
 
-  uint64_t *bottom = PTR_STACK;
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
+  uint64_t *bottom = PTR_STACK;
 
   for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
     process_ptr(ptr);
@@ -221,16 +228,12 @@ static void mark_and_copy(void) {
 }
 
 void collect(void) {
-  GC.stats.collections_count++;
-
   GC.stats.bank_current = 1 - GC.stats.bank_current;
   uint64_t *bank_start = GET_BANK_START(GC);
   GC.ptr_base = bank_start;
 
   mark_and_copy();
-
-  const uint64_t words = GC.ptr_base - bank_start;
-  GC.words_allocated_current = words;
+  GC.stats.collections_count++;
 }
 
 uint64_t *gc_alloc(uint64_t size, uint64_t tag) {
@@ -243,12 +246,12 @@ uint64_t *gc_alloc(uint64_t size, uint64_t tag) {
     bank_final = GET_BANK_FINAL(GC);
     if (GC.ptr_base + offset > bank_final) {
       fprintf(stderr, "Out of memory after GC\n");
+      destroy_gc();
       exit(1);
     }
   }
-  GC.stats.allocations_count++;
 
-  *(GC.ptr_base) = SET_HEADER(size, 0x0, tag);
+  *(GC.ptr_base) = SET_HEADER(size, tag);
 
   uint64_t *obj = GC.ptr_base + 1;
   for (uint64_t i = 0; i < size; i++) {
@@ -256,8 +259,8 @@ uint64_t *gc_alloc(uint64_t size, uint64_t tag) {
   }
 
   GC.ptr_base += offset;
-  GC.words_allocated_current += offset;
   GC.stats.words_allocated_total += offset;
+  GC.stats.allocations_count++;
   return obj;
 }
 
@@ -283,6 +286,9 @@ closure *alloc_closure(void *func, int64_t arity) {
 #endif
   if (!clos) {
     fprintf(stderr, "Closure allocation error\n");
+#ifdef ENABLE_GC
+    destroy_gc();
+#endif
     exit(1);
   }
 
@@ -305,6 +311,9 @@ closure *copy_closure(const closure *src) {
 #endif
   if (!dst) {
     fprintf(stderr, "Closure allocation error\n");
+#ifdef ENABLE_GC
+    destroy_gc();
+#endif
     exit(1);
   }
 

@@ -15,7 +15,7 @@ void print_int(long n) { printf("%ld", TO_ML_INTEGER(n)); }
 
 /* ========== Garbage Collector ========== */
 
-int SIZE_HEAP = 1600;
+int SIZE_HEAP = 1800;
 const uint8_t TAG_NUMBER = 0;
 const uint8_t TAG_CLOSURE = 247;
 
@@ -27,9 +27,10 @@ const uint8_t TAG_CLOSURE = 247;
 #define SET_HEADER(size, mark, tag)                                                 \
   ((uint64_t)(((uint64_t)(size) << SHIFT_SIZE) | ((uint64_t)(mark) << SHIFT_MARK) | \
               ((uint64_t)(tag) << SHIFT_TAG)))
-#define GET_SIZE(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_SIZE) & 0x3FFF)
-#define GET_MARK(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_MARK) & 0x1)
-#define GET_TAG(ptr) ((*((uint64_t *)(ptr) - 1) >> SHIFT_TAG) & 0xFF)
+#define GET_SIZE(ptr) ((*(uint64_t *)(ptr) >> SHIFT_SIZE) & 0x3FFF)
+#define GET_MARK(ptr) ((*(uint64_t *)(ptr) >> SHIFT_MARK) & 0x1)
+#define GET_TAG(ptr) ((*(uint64_t *)(ptr) >> SHIFT_TAG) & 0xFF)
+#define IS_HEADER(value) (!((value) & 0xFFFFFFFFFF))
 #define IS_NOT_PTR(value) (value & 0x7)
 
 typedef struct {
@@ -94,7 +95,9 @@ static bool is_in_bank_sub(uint64_t *ptr) {
   (GC.stats.bank_current == 0 ? GC.start_bank_main : GC.start_bank_sub)
 #define GET_BANK_FINAL(GC)                                                          \
   (GC.stats.bank_current == 0 ? GC.final_bank_main : GC.final_bank_sub)
-#define GET_IS_IN_BANK(GC)                                                          \
+#define GET_IS_IN_BANK_CUR(GC)                                                      \
+  (GC.stats.bank_current == 0 ? is_in_bank_main : is_in_bank_sub)
+#define GET_IS_IN_BANK_OLD(GC)                                                      \
   (GC.stats.bank_current == 1 ? is_in_bank_main : is_in_bank_sub)
 
 uint64_t get_heap_start(void) { return (uint64_t)GET_BANK_START(GC); }
@@ -121,12 +124,39 @@ void print_gc_status(void) {
 static uint64_t *PTR_STACK = NULL;
 void set_ptr_stack(uint64_t *ptr_stack) { PTR_STACK = ptr_stack; }
 
+static uint64_t *get_header(uint64_t *obj, int is_in_old) {
+  uint64_t *ptr = obj;
+
+  is_in_bank_t is_in_bank =
+      (is_in_old == 1 ? GET_IS_IN_BANK_OLD(GC) : GET_IS_IN_BANK_CUR(GC));
+
+  while (ptr != NULL && is_in_bank(ptr)) {
+    if (IS_HEADER(*ptr)) {
+      return ptr;
+    }
+    ptr--;
+  }
+
+  return NULL;
+}
+
 static uint64_t *copy_object(uint64_t *obj) {
-  const uint64_t size = GET_SIZE(obj);
-  const uint64_t tag = GET_TAG(obj);
+  uint64_t *header = get_header(obj, 1);
+  if (header == NULL) {
+    fprintf(stderr, "Incorrect header\n");
+    exit(1);
+  }
+
+  if (GET_MARK(header)) {
+  }
+
+  const uint64_t size = GET_SIZE(header);
+  const uint64_t tag = GET_TAG(header);
   const uint64_t offset = size + 1;
 
   if (GC.ptr_base + offset > GET_BANK_FINAL(GC)) {
+    print_gc_status();
+    printf("offset, obj: %lu %p\n", offset, obj);
     fprintf(stderr, "Out of memory during GC\n");
     exit(1);
   }
@@ -142,7 +172,7 @@ static uint64_t *copy_object(uint64_t *obj) {
     memcpy(obj_sub, obj, size * sizeof(uint64_t));
   }
 
-  *(obj - 1) = SET_HEADER(size, 0x1, tag);
+  *header = SET_HEADER(size, 0x1, tag);
   GC.ptr_base += offset;
 
   return obj_sub;
@@ -150,13 +180,15 @@ static uint64_t *copy_object(uint64_t *obj) {
 
 static void update_ptrs(uint64_t *obj);
 
-static void process_ptr(is_in_bank_t is_in_bank_old, uint64_t *ptr) {
+static void process_ptr(uint64_t *ptr) {
   uint64_t value = *ptr;
   if (value == 0 || IS_NOT_PTR(value)) {
     return;
   }
 
+  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK_OLD(GC);
   uint64_t *ptr_cond = (uint64_t *)value;
+
   if (is_in_bank_old(ptr_cond) && !GET_MARK(ptr_cond)) {
     uint64_t *obj_sub = copy_object(ptr_cond);
     *ptr = (uint64_t)obj_sub;
@@ -168,10 +200,10 @@ static void update_ptrs(uint64_t *obj) {
   const uint64_t size = GET_SIZE(obj);
   const uint64_t tag = GET_TAG(obj);
 
-  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK(GC);
+  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK_OLD(GC);
 
   for (uint64_t i = 0; i < size; i++) {
-    process_ptr(is_in_bank_old, &obj[i]);
+    process_ptr(&obj[i]);
   }
 }
 
@@ -180,13 +212,11 @@ static void mark_and_copy(void) {
     return;
   }
 
-  is_in_bank_t is_in_bank_old = GET_IS_IN_BANK(GC);
-
   uint64_t *bottom = PTR_STACK;
   uint64_t *top = (uint64_t *)__builtin_frame_address(0);
 
   for (uint64_t *ptr = top; ptr <= bottom; ptr++) {
-    process_ptr(is_in_bank_old, ptr);
+    process_ptr(ptr);
   }
 }
 

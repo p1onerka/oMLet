@@ -499,9 +499,9 @@ let init_arity_map ast =
 let gen_a_structure ~enable_gc ppf anf_ast =
   fprintf ppf ".section .text";
   let arity_map =
-    let print_arities = [ "print_int", 1; "print_endline", 2 ] in
+    let print_arities = [ "print_int", 1; "print_endline", 1 ] in
     let gc_arities =
-      [ "collect", 3; "get_heap_start", 4; "get_heap_final", 5; "print_gc_status", 6 ]
+      [ "collect", 0; "get_heap_start", 0; "get_heap_final", 0; "print_gc_status", 0 ]
     in
     let all_arities = if enable_gc then print_arities @ gc_arities else print_arities in
     List.fold

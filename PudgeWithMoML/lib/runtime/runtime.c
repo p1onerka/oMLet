@@ -33,10 +33,10 @@
   } while (0)
 
 #ifdef DEBUG
-static void print_stack(void *current_sp) {
+static void print_stack() {
   printf("=== STACK status ===\n");
-  printf("BASE_SP: %p, CURRENT_SP: %p\n", gc.base_sp, current_sp);
-  size_t stack_size = (gc.base_sp - current_sp) / 8;
+  printf("BASE_SP: %p, CURRENT_SP: %p\n", gc.base_sp, program_sp);
+  size_t stack_size = (gc.base_sp - program_sp) / 8;
   printf("STACK SIZE: %ld\n", stack_size);
 
   for (size_t i = 0; i < stack_size; i++) {
@@ -51,7 +51,7 @@ static void print_stack(void *current_sp) {
 #endif
 
 // New and old space size in words.
-#define SPACE_MINIMUM_SIZE (8192)
+#define SPACE_SIZE (65536)
 #define WORD_SIZE 8
 
 // All adresses are printed relative to the new_space with GC_HEAP_OFFSET.
@@ -79,7 +79,8 @@ extern void *__stop_global_vars[];
 static void *_apply_closure_chain(closure *clos, uint8_t argc, void **new_args);
 static void *_apply_closure(closure *old_clos, uint8_t argc, void **new_args);
 static void *_alloc_closure(void *f, uint8_t argc);
-static void update_stack_data_ptrs(void *current_sp, void *old, void *new);
+static void update_stack_data_ptrs(void *old, void *new);
+static void update_sp();
 
 void flush() { fflush(stdout); }
 
@@ -97,6 +98,7 @@ typedef struct {
 } GC_state;
 
 static GC_state gc;
+static void *program_sp;
 
 struct closure {
   void *code;
@@ -142,7 +144,7 @@ void print_gc_status() {
     if (gc.new_space == gc.heap_start) {
       addr = ((void **)GC_HEAP_OFFSET) + offset;
     } else {
-      addr = ((void **)GC_HEAP_OFFSET) + SPACE_MINIMUM_SIZE + offset;
+      addr = ((void **)GC_HEAP_OFFSET) + SPACE_SIZE + offset;
     }
 
     printf("\t(%p) 0x%zx: [size: %ld]\n", addr, offset, size);
@@ -157,28 +159,27 @@ void print_gc_status() {
 
   printf("============ GC STATUS ============\n\n");
 
-  void *current_sp = NULL;
-  asm volatile("mv %0, sp" : "=r"(current_sp));
-  LOGF(print_stack(current_sp));
+  update_sp();
+  LOGF(print_stack(program_sp));
 
   return;
 }
 
 void init_GC(void *base_sp) {
   gc.base_sp = base_sp;
-  gc.space_capacity = SPACE_MINIMUM_SIZE;
-  void **heap = malloc(sizeof(void *) * SPACE_MINIMUM_SIZE * 2);
+  gc.space_capacity = SPACE_SIZE;
+  void **heap = malloc(sizeof(void *) * SPACE_SIZE * 2);
   gc.new_space = heap;
   gc.heap_start = heap;
   gc.alloc_offset = 0;
-  gc.old_space = heap + SPACE_MINIMUM_SIZE;
+  gc.old_space = heap + SPACE_SIZE;
 
   return;
 }
 
-// Change all pointers from old to new in .data section and at given stack (from current_sp to gc.base_sp)
-static void update_stack_data_ptrs(void *current_sp, void *old, void *new) {
-  size_t stack_size = (gc.base_sp - current_sp) / 8;
+// Change all pointers from old to new in global variables section and at stack
+static void update_stack_data_ptrs(void *old, void *new) {
+  size_t stack_size = (gc.base_sp - program_sp) / 8;
 
   // update pointers on stack
   for (size_t i = 0; i < stack_size; i++) {
@@ -198,37 +199,6 @@ static void update_stack_data_ptrs(void *current_sp, void *old, void *new) {
   return;
 }
 
-// Update all pointers in new_space, assuming they was copied from old_space
-static void update_ptrs(void *current_sp, void **old_space, void **new_space, size_t size) {
-  size_t cur_offset = 0;
-  while (cur_offset < size) {
-    size_t cur_size = (size_t)new_space[cur_offset];
-    void *old_pointer = old_space + cur_offset + 1;
-    void *new_pointer = new_space + cur_offset + 1;
-    update_stack_data_ptrs(current_sp, old_pointer, new_pointer);
-
-    for (size_t j = 0; j < cur_size; j++) {
-      void **data_pointer = new_space + cur_offset + 1 + j;
-      if ((uintptr_t)(*data_pointer) & 1) { // not a pointer
-        continue;
-      }
-
-      if (*data_pointer < (void *)old_space || *data_pointer >= (void *)(old_space + size)) { // not a heap pointer
-        continue;
-      }
-
-      // update data pointers so they point to a similar place in new_space
-      size_t data_ptr_offset = (void **)*data_pointer - old_space;
-      void *new_data_pointer = new_space + data_ptr_offset;
-      new_space[cur_offset + 1 + j] = new_data_pointer;
-
-      update_stack_data_ptrs(current_sp, *data_pointer, new_data_pointer);
-    }
-
-    cur_offset += cur_size + 1;
-  }
-}
-
 // When we exec gc_collect we have on a heap objects:
 // [size 3] [data 0] [data 1] [data 2] [size 1] [data 0] [size 2] ...
 // We iterate through heap and try to find poiters to "data 0" on stack
@@ -236,15 +206,15 @@ static void update_ptrs(void *current_sp, void **old_space, void **new_space, si
 //   1) move size bytes to the old_space
 //   2) save new pointer to old_space
 //   3) iterate through stack and replace all pointers to the new pointers
-static void _gc_collect(void *current_sp) {
+static void _gc_collect() {
   if (gc.alloc_offset == 0) {
     return;
   }
   gc.obj_count = 0;
 
-  LOGF(print_stack(current_sp));
+  LOGF(print_stack(program_sp));
 
-  size_t stack_size = (gc.base_sp - current_sp) / 8;
+  size_t stack_size = (gc.base_sp - program_sp) / 8;
   size_t cur_offset = 0;
   size_t old_space_offset = 0;
   while (cur_offset < gc.alloc_offset) {
@@ -301,7 +271,7 @@ static void _gc_collect(void *current_sp) {
 
     LOG("RUN CHANGING\n");
     // change all stack occurences
-    update_stack_data_ptrs(current_sp, cur_pointer, new_pointer);
+    update_stack_data_ptrs(cur_pointer, new_pointer);
     // size is -1, first data is new pointer, this is how we mark that object is moved
     gc.new_space[cur_offset] = (void *)-1;
     *cur_pointer = new_pointer;
@@ -317,7 +287,7 @@ static void _gc_collect(void *current_sp) {
     for (size_t j = 0; j < cur_size; j++) {
       size_t data_offset = cur_offset++;
       void **data_pointer = gc.old_space[data_offset];
-      if ((uintptr_t)data_pointer & 1) { // not a pointer
+      if ((uintptr_t)data_pointer & 7) { // not a pointer
         continue;
       }
 
@@ -347,7 +317,7 @@ static void _gc_collect(void *current_sp) {
     }
   }
 
-  LOGF(print_stack(current_sp));
+  LOGF(print_stack(program_sp));
 
   void *temp = gc.new_space;
   gc.new_space = gc.old_space;
@@ -357,17 +327,19 @@ static void _gc_collect(void *current_sp) {
   gc.collect_count++;
 }
 
-inline static void *get_sp() {
-  void *current_sp = NULL;
-  asm volatile("mv %0, sp" : "=r"(current_sp));
-  return current_sp;
+inline static void update_sp() {
+  asm volatile("mv %0, sp" : "=r"(program_sp));
+  return;
 }
 
 // WARNING: if you read stack pointer in _gc_collect function then when you go
 // through stack you can change local variables of _gc_collect fuction
 // So we write wrapper only for reading stack pointer **before** _gc_collect
 // function It took 4 hours for debug this chaos 🐣🐣🐤🐤🐔🐔🦆🦆🐹🐹🐹🐹
-void gc_collect() { _gc_collect(get_sp()); }
+void gc_collect() {
+  update_sp();
+  _gc_collect();
+}
 
 // alloc size bytes in gc.memory
 static void *my_malloc(size_t size) {
@@ -375,8 +347,6 @@ static void *my_malloc(size_t size) {
   if (size == 0) {
     return NULL;
   }
-
-  void *current_sp = get_sp();
 
   // 8 byte rounding
   if (size % 8 != 0) {
@@ -388,22 +358,14 @@ static void *my_malloc(size_t size) {
   // no free space left after alloc size bytes + header
   if (gc.alloc_offset + (words + 1) >= gc.space_capacity) {
     LOG("no free space\n");
-    _gc_collect(current_sp); // TODO: THINK ABOUT SAFETY of this collect call: it can corrupt runtime variables!
+    update_sp();
+    _gc_collect();
 
-    // after collecting we still don't have space, so we are increasing heap size
+    // after collecting we still don't have space
     if (gc.alloc_offset + (words + 1) >= gc.space_capacity) {
-      LOG("Allocate more space for GC heap\n");
-
-      void **old_heap = gc.heap_start;
-      gc.space_capacity *= 2;
-      void **new_heap = malloc(sizeof(void *) * gc.space_capacity * 2);
-      memcpy(new_heap, gc.new_space, sizeof(void *) * gc.alloc_offset);
-      update_ptrs(current_sp, gc.new_space, new_heap, gc.alloc_offset);
-      free(old_heap);
-
-      gc.heap_start = new_heap;
-      gc.new_space = new_heap;
-      gc.old_space = new_heap + gc.space_capacity;
+      fprintf(stderr, "panic! overflow memory limits\n");
+      fflush(stderr);
+      exit(122);
     }
   }
   gc.obj_count++;
@@ -454,6 +416,7 @@ static void *_alloc_closure(void *f, uint8_t argc) {
 }
 
 void *alloc_closure(INT8, void *f, uint8_t argc) {
+  update_sp();
   argc = argc >> 1;
   return _alloc_closure(f, argc);
 }
@@ -468,6 +431,7 @@ void *apply_closure_chain(INT8, closure *old_clos, uint8_t argc, ...) {
   argc = argc >> 1;
   void *new_args[argc]; // IT IS MATTER THAT WE ALLOCATE ON STACK FOR POSSIBLE GC COLLECT
   LOAD_VARARGS(new_args, argc);
+  update_sp();
 
   void *result = _apply_closure_chain(old_clos, argc, new_args);
   return result;
@@ -516,7 +480,7 @@ static void *_apply_closure(closure *old_clos, uint8_t argc, void **new_args) {
 
   // it is full application, we need to exec function and return result, not producing any garbage
   if (old_clos->argc_recived + argc == old_clos->argc) {
-    void *args[old_clos->argc]; // IT IS MATTER THAT WE ALLOCATE ON STACK FOR POSSIBLE GC
+    void *args[old_clos->argc]; // IT IS MATTER THAT WE ALLOCATE ON STACK FOR POSSIBLE GC COLLECT
     merge_closure_args(args, old_clos, new_args, argc);
 
     LOG(" -> *exec 0x%x*\n", old_clos->code);

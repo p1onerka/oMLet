@@ -87,7 +87,7 @@ void flush() { fflush(stdout); }
 typedef struct {
   void *base_sp;
   size_t space_capacity; // current space size in words
-  void **heap_start;     // start address of spaces (spaces are arranged in a row)
+  void **heap_start;     // start address of heap (spaces are arranged in a row)
   void **new_space;
   size_t alloc_offset; // first free word offset in new space
   void **old_space;
@@ -204,13 +204,19 @@ static void update_stack_data_ptrs(void *old, void *new) {
   return;
 }
 
-// When we exec gc_collect we have on a heap objects:
+// We have heap objects located something like this:
 // [size 3] [data 0] [data 1] [data 2] [size 1] [data 0] [size 2] ...
-// We iterate through heap and try to find poiters to "data 0" on stack
-// If we find it in first time:
-//   1) move size bytes to the old_space
-//   2) save new pointer to old_space
-//   3) iterate through stack and replace all pointers to the new pointers
+// We make 2 passes:
+// 1) going through all the new_space objects:
+//   1.1) look for object pointers on stack and in global variables.
+//   1.2) if we found at least one pointer, then copy object to old_space and update all pointers on stack and in global
+//   variables.
+//   1.3) mark object in new_space as moved (size = -1, first data = new pointer)
+// 2) going through all the old_space objects:
+//   2.1) look for all object data that are pointers to other objects in new_space.
+//   2.2) if pointed object is marked as moved, then update pointer to new location.
+//   2.3) if pointed object is not marked as moved, then copy it to old_space, mark as moved (size = -1, first data =
+//   new pointer) and update pointer.
 static void _gc_collect() {
   if (gc.alloc_offset == 0) {
     return;
@@ -235,7 +241,7 @@ static void _gc_collect() {
 
     LOG("Try to find stack cell with 0x%x value on 0x%ld offset\n", cur_pointer, cur_offset + 1);
 
-    // try to find in stack at least one pointer
+    // try to find in stack and global variables at least one pointer
     {
       bool found = false;
 
@@ -337,10 +343,6 @@ inline static void update_sp() {
   return;
 }
 
-// WARNING: if you read stack pointer in _gc_collect function then when you go
-// through stack you can change local variables of _gc_collect fuction
-// So we write wrapper only for reading stack pointer **before** _gc_collect
-// function It took 4 hours for debug this chaos 🐣🐣🐤🐤🐔🐔🦆🦆🐹🐹🐹🐹
 void gc_collect() {
   update_sp();
   _gc_collect();
@@ -434,7 +436,7 @@ static void merge_closure_args(void **dest, closure *clos, void **new_args, uint
 
 void *apply_closure_chain(INT8, closure *old_clos, uint8_t argc, ...) {
   argc = argc >> 1;
-  void *new_args[argc]; // IT IS MATTER THAT WE ALLOCATE ON STACK FOR POSSIBLE GC COLLECT
+  void *new_args[argc]; // It is matter that we allocate on stack for possible GC collect
   LOAD_VARARGS(new_args, argc);
   update_sp();
 
@@ -485,7 +487,7 @@ static void *_apply_closure(closure *old_clos, uint8_t argc, void **new_args) {
 
   // it is full application, we need to exec function and return result, not producing any garbage
   if (old_clos->argc_recived + argc == old_clos->argc) {
-    void *args[old_clos->argc]; // IT IS MATTER THAT WE ALLOCATE ON STACK FOR POSSIBLE GC COLLECT
+    void *args[old_clos->argc]; // It is matter that we allocate on stack for possible GC collect
     merge_closure_args(args, old_clos, new_args, argc);
 
     LOG(" -> *exec 0x%x*\n", old_clos->code);

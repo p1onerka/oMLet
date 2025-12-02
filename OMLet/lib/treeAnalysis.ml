@@ -39,6 +39,7 @@ let rec analyze_cexpr stack_size = function
     (* uncomment that if t-regs will be used again *)
     (* stack_size (*+ 7*) + List.length args *)
     List.fold_left analyze_arg stack_size args
+  | CTuple _ -> stack_size
 
 and analyze_aexpr stack_size = function
   | ACExpr ce -> analyze_cexpr stack_size ce

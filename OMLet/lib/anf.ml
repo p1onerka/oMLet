@@ -29,6 +29,7 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr (* fun a -> a + 42 *)
   | CApp of immexpr * immexpr list (* func_name arg1 arg2 ... argn *)
+  | CTuple of immexpr * immexpr * immexpr list
 [@@deriving show { with_path = false }]
 
 and aexpr =
@@ -241,8 +242,19 @@ let rec anf (state : state) e expr_with_hole =
         ; functions = FuncSet.add lifted_name state2.functions
         }
     in
-    (* Format.printf "state3 %a@. \n" pp_state state3; *)
     return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)
+  | Tuple (fst, snd, rest) ->
+    anf state fst (fun fst_imm ->
+      anf state snd (fun snd_imm ->
+        let rec anf_list acc st = function
+          | [] ->
+            let* varname = gen_temp "res_of_tuple" in
+            let* e, state1 = expr_with_hole (ImmId varname) in
+            return (ALet (varname, CTuple (fst_imm, snd_imm, List.rev acc), e), state1)
+          | expr :: e_rest ->
+            anf st expr (fun immval -> anf_list (immval :: acc) st e_rest)
+        in
+        anf_list [] state rest))
   | _ ->
     (* Stdlib.Format.printf "%a@." pp_expr e; *)
     fail (Not_Yet_Implemented "ANF expr")
@@ -408,6 +420,17 @@ and free_vars_cexpr lams = function
       | None -> IdentSet.empty
     in
     IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
+  | CTuple (fst, snd, rest) ->
+    let fv_fst_snd = IdentSet.union (free_vars_imm lams fst) (free_vars_imm lams snd) in
+    let fv_rest =
+      List.fold_left
+        (fun acc -> function
+           | ImmId id -> IdentSet.add id acc
+           | _ -> acc)
+        IdentSet.empty
+        rest
+    in
+    IdentSet.union fv_rest fv_fst_snd
 ;;
 
 module IdentMap = Map.Make (struct

@@ -39,6 +39,12 @@ and pp_cexpr fmt = function
       fn
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " ") pp_imm)
       args
+  | CTuple (fst, snd, rest) ->
+    fprintf
+      fmt
+      "@[<2>(%a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_imm)
+      (fst :: snd :: rest)
 
 and pp_imm fmt = function
   | ImmNum n -> fprintf fmt "%d" n

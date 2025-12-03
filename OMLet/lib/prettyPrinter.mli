@@ -4,3 +4,4 @@
 
 val pp_construction : Format.formatter -> Ast.construction -> unit
 val pp_p_res : Format.formatter -> Ast.construction option -> unit
+val pp_pattern : Format.formatter -> Ast.pattern -> unit

@@ -72,6 +72,21 @@ void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {
   return partial;
 }
 
+typedef struct {
+  int64_t fields_num;
+  void *fields[];
+} tuple;
+
+tuple *create_tuple(int64_t fields_num, void **args) {
+  tuple *t = my_alloc(sizeof(tuple) + sizeof(void *) * fields_num, T_TUPLE);
+  t->fields_num = fields_num;
+  for (int i = 0; i < t->fields_num; i++) {
+    t->fields[i] = args[i];
+  }
+  // printf("%p\n", t);
+  return t;
+}
+
 void print_int(int64_t a) {
   int64_t res = a >> 1;
   printf("%ld", res);

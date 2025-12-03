@@ -16,8 +16,9 @@
 
 typedef uint8_t tag_t;
 enum {
-  T_UNBOXED = 0,
-  T_CLOSURE = 1,
+  T_UNBOXED = 1,
+  T_CLOSURE = 247,
+  T_TUPLE = 0,
 };
 
 typedef uint8_t color_t;

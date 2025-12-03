@@ -163,7 +163,19 @@ let add_instr instr =
   write new_state
 ;;
 
-let codegen_immexpr immexpr =
+(* change back to Arg 0 here? *)
+
+let find_argument =
+  let* state = read in
+  match state.a_regs with
+  | a_reg :: rest ->
+    let new_state = { state with a_regs = rest } in
+    let* () = write new_state in
+    return a_reg
+  | _ -> fail "argument storing on stack is not yet implemented"
+;;
+
+let rec codegen_immexpr immexpr =
   let* state = read in
   let a_regs_hd = List.hd state.a_regs in
   match immexpr with
@@ -202,19 +214,43 @@ let codegen_immexpr immexpr =
        let* () = add_instr (Pseudo (LI (Arg 1, Num arity))) in
        add_instr (Pseudo (CALL "alloc_closure"))
      | Some (Value reg) -> add_instr (Pseudo (MV (a_regs_hd, reg))))
-  | ITuple _ -> failwith "" (* TODO *)
-;;
-
-(* change back to Arg 0 here? *)
-
-let find_argument =
-  let* state = read in
-  match state.a_regs with
-  | a_reg :: rest ->
-    let new_state = { state with a_regs = rest } in
-    let* () = write new_state in
-    return a_reg
-  | _ -> fail "argument storing on stack is not yet implemented"
+  | ITuple (fst, snd, rest) ->
+    let fields = fst :: snd :: rest in
+    let rec check_immexpr = function
+      | ImmNum _ -> true
+      | ImmId (Ident name) -> Option.is_some (InfoMap.find_opt name state.info)
+      | ITuple (fst, snd, rest) ->
+        check_immexpr fst && check_immexpr snd && List.for_all check_immexpr rest
+    in
+    let all_valid = List.for_all check_immexpr fields in
+    (match all_valid with
+     | false -> fail "Panic: undefined var in codegen!"
+     | true ->
+       let fields_num = List.length fields in
+       let* buf_offset = extend_stack (8 * fields_num) in
+       let old_a_regs = state.a_regs in
+       let* () =
+         List.fold_left
+           (fun acc (i, field) ->
+              let* () = acc in
+              let* () = codegen_immexpr field in
+              let* arg_reg = find_argument in
+              let* () = update_a_regs old_a_regs in
+              let* () =
+                add_instr
+                  (True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8), Sp))))
+              in
+              return ())
+           (return ())
+           (List.mapi (fun i field -> i, field) fields)
+       in
+       let* () = add_instr (Pseudo (LI (Arg 0, Num fields_num))) in
+       let* () = add_instr (True (IType (ADDI, Arg 1, Sp, Num buf_offset))) in
+       let* () = add_instr (Pseudo (CALL "create_tuple")) in
+       let* state = read in
+       let new_stack = state.stack - (8 * fields_num) in
+       let* () = update_stack new_stack in
+       update_a_regs clear_a_regs)
 ;;
 
 let codegen_binop_tagged a_regs_hd fst snd = function
@@ -414,7 +450,7 @@ and codegen_aexpr = function
     let* () = codegen_aexpr body in
     let* () = update_a_regs old_a_regs in
     update_free_regs old_free_regs
-  | ALet (pat, cexpr, body) -> failwith "" (*TODO*)
+  | ALet (pat, cexpr, body) -> failwith "453" (*TODO*)
 ;;
 
 let codegen_astatement astmt =
@@ -482,7 +518,7 @@ let codegen_astatement astmt =
       let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
       add_instr (Pseudo (CALL "free_heap"))
     else return ()
-  | _, st -> failwith "" (* TODO *)
+  | _, st -> failwith "521" (* TODO *)
 ;;
 
 let codegen_aconstruction aconstr =

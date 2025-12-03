@@ -234,6 +234,26 @@ void* alloc_block(int64_t len) {
     return (void*)b;
 }
 
+value create_tuple(int64_t n) {
+    return (value)alloc_block(n);
+}
+
+value field(value val, int64_t index) {
+    if (IS_INT(val)) panic("field: attempt to access field of an integer");
+    if (val == 0) panic("field: null pointer dereference");
+    
+    GCHeader* h = (GCHeader*)val;
+    if (h->type != &VT_Block) panic("field: attempt to access field of a non-tuple object");
+
+    Block* b = (Block*)val;
+    if (index < 0 || index >= b->len) {
+        fprintf(stderr, "field: index %" PRId64 " out of bounds (len %" PRId64 ")\n", index, b->len);
+        abort();
+    }
+
+    return b->elems[index];
+}
+
 Closure* alloc_closure(void* code, int64_t arity) {
     if (arity < 0) panic("alloc_closure: negative arity");
     Closure* c = (Closure*)gc_alloc_bytes(clos_bytes_for_arity(arity), &VT_Closure);

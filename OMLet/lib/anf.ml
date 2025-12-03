@@ -137,13 +137,13 @@ let rec anf (state : state) e expr_with_hole =
   | Bin_expr (op, l, r) ->
     let* opname, op_name = binop_map op in
     anf_binop opname op_name l r expr_with_hole
+  | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
+    anf state expr (fun _ -> anf state body expr_with_hole)
+  | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
+    anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (pat, [], expr), [], body) ->
     let* body_anf, state1 = anf state body expr_with_hole in
     anf state1 expr (fun immval -> return (ALet (pat, CImmexpr immval, body_anf), state1))
-  (* | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
-    anf state expr (fun _ -> anf state body expr_with_hole)
-  | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
-    anf state expr (fun _ -> anf state body expr_with_hole) *)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right

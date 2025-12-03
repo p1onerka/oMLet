@@ -7,6 +7,7 @@ open Ast
 type immexpr =
   | ImmNum of int
   | ImmId of ident
+  | ITuple of immexpr * immexpr * immexpr list
 [@@deriving show { with_path = false }]
 
 type cbinop =
@@ -28,17 +29,16 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr
   | CApp of immexpr * immexpr list
-  | CTuple of immexpr * immexpr * immexpr list
 [@@deriving show { with_path = false }]
 
 and aexpr =
-  | ALet of ident * cexpr * aexpr
+  | ALet of pattern * cexpr * aexpr
   | ACExpr of cexpr
 [@@deriving show { with_path = false }]
 
 type aconstruction =
   | AExpr of aexpr
-  | AStatement of is_recursive * (ident * aexpr) list
+  | AStatement of is_recursive * (pattern * aexpr) list
 [@@deriving show { with_path = false }]
 
 type aconstructions = aconstruction list [@@deriving show { with_path = false }]

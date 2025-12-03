@@ -7,9 +7,17 @@ open Format
 open Ast
 
 let rec pp_aexpr fmt = function
-  | ALet (Ident name, cexpr, body) ->
+  | ALet (pat, cexpr, body) ->
     (* keep inner lets compact *)
-    fprintf fmt "@[<v 2>let %s = %a in@,%a@]" name pp_cexpr cexpr pp_aexpr body
+    fprintf
+      fmt
+      "@[<v 2>let %a = %a in@,%a@]"
+      PrettyPrinter.pp_pattern
+      pat
+      pp_cexpr
+      cexpr
+      pp_aexpr
+      body
   | ACExpr cexpr -> fprintf fmt "%a" pp_cexpr cexpr
 
 and pp_cbinop fmt l r = function
@@ -39,23 +47,21 @@ and pp_cexpr fmt = function
       fn
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " ") pp_imm)
       args
-  | CTuple (fst, snd, rest) ->
+
+and pp_imm fmt = function
+  | ImmNum n -> fprintf fmt "%d" n
+  | ImmId (Ident x) -> fprintf fmt "%s" x
+  | ITuple (fst, snd, rest) ->
     fprintf
       fmt
       "@[<2>(%a)@]"
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_imm)
       (fst :: snd :: rest)
 
-and pp_imm fmt = function
-  | ImmNum n -> fprintf fmt "%d" n
-  | ImmId (Ident x) -> fprintf fmt "%s" x
-
 and pp_binding fmt (id, aexpr) =
   let open Ast in
-  match id with
-  | Ident name ->
-    (* top-level lets print on a new line after '=' *)
-    fprintf fmt "%s =@,%a" name pp_aexpr aexpr
+  (* top-level lets print on a new line after '=' *)
+  fprintf fmt "%a =@,%a" PrettyPrinter.pp_pattern id pp_aexpr aexpr
 
 and pp_astatement fmt (is_rec, bindings) =
   let open Ast in

@@ -388,6 +388,11 @@ let rec free_vars_imm lams = function
      | Some cexpr -> free_vars_cexpr lams cexpr
      | None -> IdentSet.singleton id)
   | ImmNum _ -> IdentSet.empty
+  | ITuple (fst, snd, rest) ->
+    List.fold_left
+      (fun acc imm -> IdentSet.union acc (free_vars_imm lams imm))
+      IdentSet.empty
+      (fst :: snd :: rest)
 
 and free_vars_aexpr lams (expr : aexpr) : IdentSet.t =
   match expr with
@@ -434,6 +439,7 @@ and free_vars_cexpr lams = function
       | None -> IdentSet.empty
     in
     IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
+  | CField (imm, _) -> free_vars_imm lams imm
 ;;
 
 module IdentMap = Map.Make (struct

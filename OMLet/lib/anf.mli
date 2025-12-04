@@ -32,13 +32,13 @@ type cexpr =
 [@@deriving show { with_path = false }]
 
 and aexpr =
-  | ALet of pattern * cexpr * aexpr
+  | ALet of ident * cexpr * aexpr
   | ACExpr of cexpr
 [@@deriving show { with_path = false }]
 
 type aconstruction =
   | AExpr of aexpr
-  | AStatement of is_recursive * (pattern * aexpr) list
+  | AStatement of is_recursive * (ident * aexpr) list
 [@@deriving show { with_path = false }]
 
 type aconstructions = aconstruction list [@@deriving show { with_path = false }]

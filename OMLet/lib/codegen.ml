@@ -427,7 +427,7 @@ let rec codegen_cexpr cexpr =
 
 and codegen_aexpr = function
   | ACExpr ce -> codegen_cexpr ce
-  | ALet (PVar (Ident name), cexpr, body) ->
+  | ALet (Ident name, cexpr, body) ->
     let* state = read in
     let old_a_regs = state.a_regs in
     let old_free_regs = state.free_regs in
@@ -450,14 +450,13 @@ and codegen_aexpr = function
     let* () = codegen_aexpr body in
     let* () = update_a_regs old_a_regs in
     update_free_regs old_free_regs
-  | ALet (pat, cexpr, body) -> failwith "453" (*TODO*)
 ;;
 
 let codegen_astatement astmt =
   let* state = read in
   let required_stack_size = analyze_astatement 0 astmt * 8 in
   match astmt with
-  | PVar (Ident name), st when is_function st ->
+  | Ident name, st when is_function st ->
     let* func_label = make_label name in
     let arity, _ = lambda_arity_of_aexpr st in
     let* () = add_instr (True (Label func_label)) in
@@ -491,8 +490,8 @@ let codegen_astatement astmt =
     in
     let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
     add_instr (Pseudo RET)
-    (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
-  | PVar (Ident _), st ->
+  (* if statement is not a function and label start isnt put yet, initialize global stack and put start label before it *)
+  | Ident _, st ->
     let* is_global =
       if state.is_start_label_put
       then return false
@@ -518,7 +517,6 @@ let codegen_astatement astmt =
       let* () = add_instr (True (IType (ADDI, Sp, Sp, Num required_stack_size))) in
       add_instr (Pseudo (CALL "free_heap"))
     else return ()
-  | _, st -> failwith "521" (* TODO *)
 ;;
 
 let codegen_aconstruction aconstr =

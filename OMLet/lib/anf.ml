@@ -105,33 +105,6 @@ type state =
 
 let empty_state = { lifted_lams = []; lifted_letins = []; functions = FuncSet.empty }
 
-(* let pp_state fmt (state : state) =
-  let pp_list fmt lst =
-    Format.fprintf fmt "[";
-    List.iter (fun (Ident id, _) -> Format.fprintf fmt "%s; " id) lst;
-    Format.fprintf fmt "]"
-  in
-  Format.fprintf
-    fmt
-    "{ lifted_lams = %a; lifted_letins = %a }"
-    pp_list
-    state.lifted_lams
-    pp_list
-    state.lifted_letins
-;; *)
-(*let rec anf_pat_tuple tuple body st num =
-  let* varname = gen_temp "res_of_tup" in
-  let* field_varname = gen_temp "res_of_field" in
-  let fst, snd, rest = tuple in
-  let rest = fst :: snd :: rest in
-  match rest with
-    | [] -> 
-    | imm :: rest -> 
-      match imm with
-  let* rec_body = anf_pat_tuple 
-  let offset = num * field_size in
-  return (ALet(Nonrec, field_varname, CField (varname, offset), rec_body))*)
-
 let rec anf_field parent_tuple field body state num =
   match field with
     | PTuple (fst, snd, rest) ->
@@ -179,31 +152,11 @@ let rec anf (state : state) e expr_with_hole =
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
     anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (PTuple (fst, snd, rest), [], expr), [], body) ->
-    (*let rest = fst :: snd :: rest in
-    let rec process_fields pats new_body st num =
-      match pats with
-      | [] -> return (new_body, st)
-      | pt :: pts -> 
-        let* varname = gen_temp "res_of_tup" in
-        let* field_varname = gen_temp "res_of_field" in
-        (* rec pats *)
-        let new_body, st = anf st new_body () in
-    in
-    process_fields rest body state 0 in*)
     let* tuple_varname = gen_temp "res_of_tuple_OUTER" in
     let rest = fst :: snd :: rest in
     let* body_anf, state = anf state body expr_with_hole in
     let* body, state = anf_tuple tuple_varname rest body_anf state 0 in
     anf state expr (fun immval -> return (ALet(tuple_varname, CImmexpr immval, body), state))
-    (*let rest = fst :: snd :: rest in
-    let rec process_fields pats new_body st num =
-      match pats with
-      | [] -> return (new_body, st)
-      | pt :: pts -> 
-        let* varname = gen_temp "res_of_tup" in
-        let* field_varname = gen_temp "res_of_field"
-    in
-    process_fields rest body st 0*)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right

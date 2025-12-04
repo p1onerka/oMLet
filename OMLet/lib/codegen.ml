@@ -296,6 +296,10 @@ let rec codegen_cexpr cexpr =
   let* state = read in
   let a_regs_hd = List.hd state.a_regs in
   match cexpr with
+  | CField (i, num) ->
+    let* () = codegen_immexpr i in
+    let* () = add_instr (Pseudo (LI (Arg 1, Num num))) in
+    add_instr (Pseudo (CALL "field"))
   | CBinop (op, i1, i2) ->
     let reg_fst = a_regs_hd in
     let* () = codegen_immexpr i1 in

@@ -33,13 +33,13 @@ type cexpr =
 [@@deriving show { with_path = false }]
 
 and aexpr =
-  | ALet of pattern * cexpr * aexpr
+  | ALet of ident * cexpr * aexpr
   | ACExpr of cexpr
 [@@deriving show { with_path = false }]
 
 type aconstruction =
   | AExpr of aexpr
-  | AStatement of is_recursive * (pattern * aexpr) list
+  | AStatement of is_recursive * (ident * aexpr) list
 [@@deriving show { with_path = false }]
 
 type aconstructions = aconstruction list [@@deriving show { with_path = false }]
@@ -125,7 +125,7 @@ let rec anf (state : state) e expr_with_hole =
         let* right_anf, state2 =
           anf state right (fun rimm ->
             let* inner, state3 = expr_with_hole (ImmId varname) in
-            return (ALet (PVar varname, CBinop (op, limm, rimm), inner), state3))
+            return (ALet (varname, CBinop (op, limm, rimm), inner), state3))
         in
         return (right_anf, state2))
     in
@@ -137,13 +137,13 @@ let rec anf (state : state) e expr_with_hole =
   | Bin_expr (op, l, r) ->
     let* opname, op_name = binop_map op in
     anf_binop opname op_name l r expr_with_hole
+  | LetIn (_, Let_bind (PVar id, [], expr), [], body) ->
+    let* body_anf, state1 = anf state body expr_with_hole in
+    anf state1 expr (fun immval -> return (ALet (id, CImmexpr immval, body_anf), state1))
   | LetIn (_, Let_bind (PConst Unit_lt, [], expr), [], body) ->
     anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
     anf state expr (fun _ -> anf state body expr_with_hole)
-  | LetIn (_, Let_bind (pat, [], expr), [], body) ->
-    let* body_anf, state1 = anf state body expr_with_hole in
-    anf state1 expr (fun immval -> return (ALet (pat, CImmexpr immval, body_anf), state1))
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right
@@ -189,11 +189,11 @@ let rec anf (state : state) e expr_with_hole =
         | [] ->
           let* varname = gen_temp "res_of_app" in
           let* e, state1 = expr_with_hole (ImmId varname) in
-          return (ALet (PVar varname, CApp (fimm, List.rev acc), e), state1)
+          return (ALet (varname, CApp (fimm, List.rev acc), e), state1)
         | [ Const Unit_lt ] ->
           let* varname = gen_temp "res_of_app" in
           let* e, state1 = expr_with_hole (ImmId varname) in
-          return (ALet (PVar varname, CApp (fimm, List.rev acc), e), state1)
+          return (ALet (varname, CApp (fimm, List.rev acc), e), state1)
         | expr :: rest -> anf st expr (fun immval -> anf_args (immval :: acc) st rest)
       in
       anf_args [] state arg_exprs)
@@ -242,7 +242,7 @@ let rec anf (state : state) e expr_with_hole =
         ; functions = FuncSet.add lifted_name state2.functions
         }
     in
-    return (ALet (PVar varname, CImmexpr (ImmId lifted_name), e), state3)
+    return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)
   | Tuple (fst, snd, rest) ->
     anf state fst (fun fst_imm ->
       anf state snd (fun snd_imm ->
@@ -251,7 +251,7 @@ let rec anf (state : state) e expr_with_hole =
             let* varname = gen_temp "res_of_tuple" in
             let* e, state1 = expr_with_hole (ImmId varname) in
             return
-              ( ALet (PVar varname, CImmexpr (ITuple (fst_imm, snd_imm, List.rev acc)), e)
+              ( ALet (varname, CImmexpr (ITuple (fst_imm, snd_imm, List.rev acc)), e)
               , state1 )
           | expr :: e_rest ->
             anf st expr (fun immval -> anf_list (immval :: acc) st e_rest)
@@ -263,11 +263,11 @@ let rec anf (state : state) e expr_with_hole =
 ;;
 
 let anf_construction (state : state) = function
-  | Statement (Let (flag, Let_bind (pat, [], expr), [])) ->
+  | Statement (Let (flag, Let_bind (PVar id, [], expr), [])) ->
     let* value, state1 =
       anf state expr (fun immval -> return (ACExpr (CImmexpr immval), state))
     in
-    return (AStatement (flag, [ pat, value ]), state1)
+    return (AStatement (flag, [ id, value ]), state1)
   | Statement (Let (flag, Let_bind (PVar name, args, expr), [])) ->
     let* arg_names =
       List.fold_right
@@ -286,7 +286,7 @@ let anf_construction (state : state) = function
       List.fold_right (fun id body -> ACExpr (CLam (id, body))) arg_names value
     in
     let state2 = { state1 with functions = FuncSet.add name state1.functions } in
-    return (AStatement (flag, [ PVar name, clams ]), state2)
+    return (AStatement (flag, [ name, clams ]), state2)
   | Expr e ->
     let* inner, state1 =
       anf state e (fun immval -> return (ACExpr (CImmexpr immval), state))
@@ -316,7 +316,7 @@ let rec refine_applications (state : state) (ae : aexpr) =
              let* inner = gen_temp "res_of_inner" in
              let new_let =
                ALet
-                 ( PVar inner
+                 ( inner
                  , CApp (ImmId func, inner_args)
                  , ALet (id, CApp (f, [ ImmId inner ]), body') )
              in
@@ -376,26 +376,14 @@ let rec free_vars_imm lams = function
      | Some cexpr -> free_vars_cexpr lams cexpr
      | None -> IdentSet.singleton id)
   | ImmNum _ -> IdentSet.empty
-  | ITuple (fst, snd, rest) ->
-    let fv_fst_snd = IdentSet.union (free_vars_imm lams fst) (free_vars_imm lams snd) in
-    let fv_rest =
-      List.fold_left
-        (fun acc -> function
-           | ImmId id -> IdentSet.add id acc
-           | _ -> acc)
-        IdentSet.empty
-        rest
-    in
-    IdentSet.union fv_rest fv_fst_snd
 
 and free_vars_aexpr lams (expr : aexpr) : IdentSet.t =
   match expr with
-  | ALet (PVar id, cexpr, body) ->
+  | ALet (id, cexpr, body) ->
     let fv_c = free_vars_cexpr lams cexpr in
     let fv_b = free_vars_aexpr lams body in
     IdentSet.union fv_c (IdentSet.remove id fv_b)
   | ACExpr c -> free_vars_cexpr lams c
-  | ALet (_, cexpr, _) -> free_vars_cexpr lams cexpr (* review later *)
 
 and free_vars_cexpr lams = function
   | CImmexpr imm -> free_vars_imm lams imm
@@ -498,7 +486,7 @@ let apply_lifted_args_aconstruction env = function
 let lift_program (state : state) acs =
   let lifted_lams = state.lifted_lams @ state.lifted_letins in
   let lifted_top_level =
-    List.map (fun (id, ce) -> AStatement (Nonrec, [ PVar id, ACExpr ce ])) lifted_lams
+    List.map (fun (id, ce) -> AStatement (Nonrec, [ id, ACExpr ce ])) lifted_lams
   in
   return (lifted_top_level @ acs)
 ;;

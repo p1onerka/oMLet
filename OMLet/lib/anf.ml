@@ -136,8 +136,9 @@ let rec anf_field parent_tuple field body state num =
   match field with
     | PTuple (fst, snd, rest) ->
       let rest = fst :: snd :: rest in
-      let* tuple_fresh = gen_temp "res_of_tuple" in
-      anf_tuple tuple_fresh rest body state 0
+      let* tuple_fresh = gen_temp "res_of_tuple_FIELD" in
+      let* body, state = anf_tuple tuple_fresh rest body state 0 in
+      return (ALet(tuple_fresh, CField(ImmId(parent_tuple), num), body), state)
     | PVar id -> 
       return (ALet(id, CField(ImmId (parent_tuple), num), body), state)
     | Wild -> return (body, state)
@@ -148,7 +149,7 @@ and anf_tuple parent_tuple tuple_rest body state num =
     | [] -> return (body, state)
     | pat :: rest ->
       let* body, state = anf_field parent_tuple pat body state num in
-      anf_tuple parent_tuple rest body state (num + 1)
+      anf_tuple parent_tuple rest body state (num + field_size)
 
 let rec anf (state : state) e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
@@ -189,10 +190,11 @@ let rec anf (state : state) e expr_with_hole =
         let new_body, st = anf st new_body () in
     in
     process_fields rest body state 0 in*)
-    let* tuple_varname = gen_temp "res_of_tuple" in
+    let* tuple_varname = gen_temp "res_of_tuple_OUTER" in
     let rest = fst :: snd :: rest in
     let* body_anf, state = anf state body expr_with_hole in
-    anf_tuple tuple_varname rest body_anf state 0
+    let* body, state = anf_tuple tuple_varname rest body_anf state 0 in
+    anf state expr (fun immval -> return (ALet(tuple_varname, CImmexpr immval, body), state))
     (*let rest = fst :: snd :: rest in
     let rec process_fields pats new_body st num =
       match pats with

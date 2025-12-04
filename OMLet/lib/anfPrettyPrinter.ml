@@ -39,7 +39,7 @@ and pp_cexpr fmt = function
       fn
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " ") pp_imm)
       args
-  | CField (imm, num) -> fprintf fmt "%a.%d" pp_imm imm (num/8)
+  | CField (imm, num) -> fprintf fmt "%a.%d" pp_imm imm num
 
 and pp_imm fmt = function
   | ImmNum n -> fprintf fmt "%d" n

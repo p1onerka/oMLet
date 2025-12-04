@@ -29,6 +29,7 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr
   | CApp of immexpr * immexpr list
+  | CField of immexpr * int
 [@@deriving show { with_path = false }]
 
 and aexpr =

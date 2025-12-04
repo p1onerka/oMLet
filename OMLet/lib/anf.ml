@@ -5,6 +5,8 @@
 open Ast
 open Format
 
+let field_size = 8
+
 type immexpr =
   | ImmNum of int (* 42 *)
   | ImmId of ident (* a *)
@@ -30,6 +32,7 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr (* fun a -> a + 42 *)
   | CApp of immexpr * immexpr list (* func_name arg1 arg2 ... argn *)
+  | CField of immexpr * int
 [@@deriving show { with_path = false }]
 
 and aexpr =
@@ -116,6 +119,36 @@ let empty_state = { lifted_lams = []; lifted_letins = []; functions = FuncSet.em
     pp_list
     state.lifted_letins
 ;; *)
+(*let rec anf_pat_tuple tuple body st num =
+  let* varname = gen_temp "res_of_tup" in
+  let* field_varname = gen_temp "res_of_field" in
+  let fst, snd, rest = tuple in
+  let rest = fst :: snd :: rest in
+  match rest with
+    | [] -> 
+    | imm :: rest -> 
+      match imm with
+  let* rec_body = anf_pat_tuple 
+  let offset = num * field_size in
+  return (ALet(Nonrec, field_varname, CField (varname, offset), rec_body))*)
+
+let rec anf_field parent_tuple field body state num =
+  match field with
+    | PTuple (fst, snd, rest) ->
+      let rest = fst :: snd :: rest in
+      let* tuple_fresh = gen_temp "res_of_tuple" in
+      anf_tuple tuple_fresh rest body state 0
+    | PVar id -> 
+      return (ALet(id, CField(ImmId (parent_tuple), num), body), state)
+    | Wild -> return (body, state)
+    | _ -> fail (Not_Yet_Implemented "pattern expr")
+   
+and anf_tuple parent_tuple tuple_rest body state num = 
+  match tuple_rest with
+    | [] -> return (body, state)
+    | pat :: rest ->
+      let* body, state = anf_field parent_tuple pat body state num in
+      anf_tuple parent_tuple rest body state (num + 1)
 
 let rec anf (state : state) e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
@@ -144,6 +177,31 @@ let rec anf (state : state) e expr_with_hole =
     anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
     anf state expr (fun _ -> anf state body expr_with_hole)
+  | LetIn (_, Let_bind (PTuple (fst, snd, rest), [], expr), [], body) ->
+    (*let rest = fst :: snd :: rest in
+    let rec process_fields pats new_body st num =
+      match pats with
+      | [] -> return (new_body, st)
+      | pt :: pts -> 
+        let* varname = gen_temp "res_of_tup" in
+        let* field_varname = gen_temp "res_of_field" in
+        (* rec pats *)
+        let new_body, st = anf st new_body () in
+    in
+    process_fields rest body state 0 in*)
+    let* tuple_varname = gen_temp "res_of_tuple" in
+    let rest = fst :: snd :: rest in
+    let* body_anf, state = anf state body expr_with_hole in
+    anf_tuple tuple_varname rest body_anf state 0
+    (*let rest = fst :: snd :: rest in
+    let rec process_fields pats new_body st num =
+      match pats with
+      | [] -> return (new_body, st)
+      | pt :: pts -> 
+        let* varname = gen_temp "res_of_tup" in
+        let* field_varname = gen_temp "res_of_field"
+    in
+    process_fields rest body st 0*)
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right

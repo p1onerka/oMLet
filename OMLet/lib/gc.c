@@ -138,7 +138,7 @@ static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
   uint64_t *new_obj = (uint64_t *)(new_hdr + 1);
 
   // copy payload
-  if (old_hdr->tag == T_CLOSURE) {
+  if (old_hdr->tag == T_CLOSURE || old_hdr->tag == T_TUPLE) {
     for (uint16_t i = 0; i < old_hdr->size; i++) {
       new_obj[i] = obj[i];
     }
@@ -153,7 +153,7 @@ static void update_pointers(uint64_t *obj, omletHeap_t *from_heap,
                             omletHeap_t *to_heap) {
   box_header_t *hdr = get_header(obj);
 
-  if (hdr->tag != T_CLOSURE) {
+  if (hdr->tag != T_CLOSURE && hdr->tag != T_TUPLE) {
     return;
   }
 

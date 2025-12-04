@@ -1,4 +1,2 @@
-let y = (1, (2, (fun x -> x+1)))
-in
-let z = (4, (5, y)) in
-print_int 1
+let n, (_, f) = 1, (2, fun x -> x + 1) in
+print_int (f n)

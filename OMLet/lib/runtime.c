@@ -87,9 +87,7 @@ tuple *create_tuple(int64_t fields_num, void **args) {
   return t;
 }
 
-void *field(tuple *tup, int64_t num) {
-  return tup->fields[num];
-}
+void *field(tuple *tup, int64_t num) { return tup->fields[num]; }
 
 void print_int(int64_t a) {
   int64_t res = a >> 1;

@@ -36,7 +36,7 @@ closure *alloc_closure(void *code, int64_t arity) {
   return c;
 }
 
-int8_t is_pointer(int64_t arg) { return !(arg & 1); };
+int8_t is_pointer(int64_t arg) { return !(arg & 1); }
 
 // apply arguments to a closure
 void *apply(closure *tagged_f, int64_t arity, void **args, int64_t argc) {

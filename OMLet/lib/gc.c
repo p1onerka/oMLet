@@ -52,7 +52,7 @@ void print_gc_status() {
   printf("Total amount of allocated memory (in bytes): %ld\n",
          total_amount_of_allocated_memory);
   printf("Total number of GC sessions: %ld\n", number_of_gc_sessions);
-  printf("Borders of current heap: from %p to %p\n", cur_heap_ptr->start,
+  printf("Borders of current heap: from %s to %s\n", cur_heap_ptr->start,
          cur_heap_ptr->start + cur_heap_ptr->size);
   printf("Free space (in bytes) on current heap: %ld\n",
          cur_heap_ptr->size - cur_heap_ptr->offset);

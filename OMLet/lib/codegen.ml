@@ -224,34 +224,34 @@ let rec codegen_immexpr immexpr =
         check_immexpr fst && check_immexpr snd && List.for_all check_immexpr rest
     in
     let all_valid = List.for_all check_immexpr fields in
-    (match all_valid with
-     | false -> fail "Panic: undefined var in codegen!"
-     | true ->
-       let fields_num = List.length fields in
-       let* buf_offset = extend_stack (8 * fields_num) in
-       let old_a_regs = state.a_regs in
-       let* () =
-         List.fold_left
-           (fun acc (i, field) ->
-              let* () = acc in
-              let* () = codegen_immexpr field in
-              let* arg_reg = find_argument in
-              let* () = update_a_regs old_a_regs in
-              let* () =
-                add_instr
-                  (True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8), Sp))))
-              in
-              return ())
-           (return ())
-           (List.mapi (fun i field -> i, field) fields)
-       in
-       let* () = add_instr (Pseudo (LI (Arg 0, Num fields_num))) in
-       let* () = add_instr (True (IType (ADDI, Arg 1, Sp, Num buf_offset))) in
-       let* () = add_instr (Pseudo (CALL "create_tuple")) in
-       let* state = read in
-       let new_stack = state.stack - (8 * fields_num) in
-       let* () = update_stack new_stack in
-       update_a_regs clear_a_regs)
+    if all_valid
+    then (
+      let fields_num = List.length fields in
+      let* buf_offset = extend_stack (8 * fields_num) in
+      let old_a_regs = state.a_regs in
+      let* () =
+        List.fold_left
+          (fun acc (i, field) ->
+             let* () = acc in
+             let* () = codegen_immexpr field in
+             let* arg_reg = find_argument in
+             let* () = update_a_regs old_a_regs in
+             let* () =
+               add_instr
+                 (True (StackType (SD, arg_reg, Stack (buf_offset + (i * 8), Sp))))
+             in
+             return ())
+          (return ())
+          (List.mapi (fun i field -> i, field) fields)
+      in
+      let* () = add_instr (Pseudo (LI (Arg 0, Num fields_num))) in
+      let* () = add_instr (True (IType (ADDI, Arg 1, Sp, Num buf_offset))) in
+      let* () = add_instr (Pseudo (CALL "create_tuple")) in
+      let* state = read in
+      let new_stack = state.stack - (8 * fields_num) in
+      let* () = update_stack new_stack in
+      update_a_regs clear_a_regs)
+    else fail "Panic: undefined var in codegen!"
 ;;
 
 let codegen_binop_tagged a_regs_hd fst snd = function

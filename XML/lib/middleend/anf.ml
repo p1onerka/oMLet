@@ -1,4 +1,5 @@
 (** Copyright 2024,  Mikhail Gavrilenko, Danila Rudnev-Stepanyan, Daniel Vlasenko*)
+
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Common.Ast.Expression
@@ -108,37 +109,34 @@ let fresh (st : nstate) : ident * nstate =
 ;;
 
 (* Helper to generate bindings for patterns (tuples, etc) *)
-let rec bind_pat
-    (pat : Pattern.t)
-    (source_imm : im_expr)
-    (body : anf_expr)
-    (st : nstate)
+let rec bind_pat (pat : Pattern.t) (source_imm : im_expr) (body : anf_expr) (st : nstate)
   : (anf_expr * nstate) r
   =
   match pat with
-  | Pattern.Pat_var x ->
-    ok (Anf_let (Nonrecursive, x, Comp_imm source_imm, body), st)
-  | Pattern.Pat_any | Pattern.Pat_construct ("()", None) ->
-    ok (body, st)
+  | Pattern.Pat_var x -> ok (Anf_let (Nonrecursive, x, Comp_imm source_imm, body), st)
+  | Pattern.Pat_any | Pattern.Pat_construct ("()", None) -> ok (body, st)
   | Pattern.Pat_tuple (p1, p2, ps) ->
     let pats = p1 :: p2 :: ps in
     let word_size = 8 in
     let rec loop i current_body st_iter remaining_pats =
-      match remaining_pats with
-      | [] -> ok (current_body, st_iter)
-      | p :: rest ->
-        let* body_rest, st_next = loop (i + 1) current_body st_iter rest in
-        let tmp_field, st_tmp = fresh st_next in
-        
-        (* Recursively bind the sub-pattern to the temp field *)
-        let* body_bind, st_bind = bind_pat p (Imm_ident tmp_field) body_rest st_tmp in
-        
-        (* let tmp = source[offset] *)
-        let offset = i * word_size in
-        ok (Anf_let (Nonrecursive, tmp_field, Comp_load (source_imm, offset), body_bind), st_bind)
+      let helper = function
+        | [] -> ok (current_body, st_iter)
+        | p :: rest ->
+          let* body_rest, st_next = loop (i + 1) current_body st_iter rest in
+          let tmp_field, st_tmp = fresh st_next in
+          (* Recursively bind the sub-pattern to the temp field *)
+          let* body_bind, st_bind = bind_pat p (Imm_ident tmp_field) body_rest st_tmp in
+          (* let tmp = source[offset] *)
+          let offset = i * word_size in
+          ok
+            ( Anf_let (Nonrecursive, tmp_field, Comp_load (source_imm, offset), body_bind)
+            , st_bind )
+      in
+      helper remaining_pats
     in
     loop 0 body st pats
   | _ -> err (`Unsupported_let_pattern (Pattern.show pat))
+;;
 
 let rec norm_comp expr (k : comp_expr -> nstate -> (anf_expr * nstate) r) (st : nstate)
   : (anf_expr * nstate) r
@@ -199,12 +197,14 @@ let rec norm_comp expr (k : comp_expr -> nstate -> (anf_expr * nstate) r) (st : 
       | _ -> err `Let_and_not_supported
     in
     let { pat; expr = vb_expr } = first_binding in
-    norm_comp vb_expr (fun ce st ->
-       let scrutinee, st1 = fresh st in
-       let* body_anf, st2 = norm_comp body k st1 in
-       let* match_anf, st3 = bind_pat pat (Imm_ident scrutinee) body_anf st2 in
-       ok (Anf_let (rec_flag, scrutinee, ce, match_anf), st3)
-    ) st
+    norm_comp
+      vb_expr
+      (fun ce st ->
+         let scrutinee, st1 = fresh st in
+         let* body_anf, st2 = norm_comp body k st1 in
+         let* match_anf, st3 = bind_pat pat (Imm_ident scrutinee) body_anf st2 in
+         ok (Anf_let (rec_flag, scrutinee, ce, match_anf), st3))
+      st
   | _ -> err `Unsupported_expr_in_normaliser
 
 and norm_to_imm expr (k : im_expr -> nstate -> (anf_expr * nstate) r) (st : nstate)

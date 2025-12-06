@@ -241,13 +241,14 @@ value create_tuple(int64_t n) {
 value field(value val, int64_t index) {
     if (IS_INT(val)) panic("field: attempt to access field of an integer");
     if (val == 0) panic("field: null pointer dereference");
-    
+
     GCHeader* h = (GCHeader*)val;
     if (h->type != &VT_Block) panic("field: attempt to access field of a non-tuple object");
 
     Block* b = (Block*)val;
     if (index < 0 || index >= b->len) {
-        fprintf(stderr, "field: index %" PRId64 " out of bounds (len %" PRId64 ")\n", index, b->len);
+        fprintf(stderr, "field: index %" PRId64 " out of bounds (len %" PRId64 ")\n", index,
+                b->len);
         abort();
     }
 

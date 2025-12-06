@@ -1,4 +1,5 @@
 (** Copyright 2024,  Mikhail Gavrilenko, Danila Rudnev-Stepanyan, Daniel Vlasenko*)
+
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Common.Ast
@@ -125,7 +126,7 @@ let rec gen_anf_expr (state : cg_state) (dst : reg) (aexpr : anf_expr) : cg_stat
 and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state r =
   (* Helper to save live regs *)
   let save_live_regs st =
-    let live = 
+    let live =
       Env.fold
         (fun _ loc acc ->
            match loc with
@@ -148,18 +149,15 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
          emit addi SP SP Target.word_size)
       (List.rev live)
   in
-
   (* Helpers for stack alignment *)
   let align_stack pushed_count =
-    if pushed_count mod 2 <> 0 then (
-      emit addi SP SP (-Target.word_size); 
+    match pushed_count mod 2 with
+    | 0 -> false
+    | _ ->
+      emit addi SP SP (-Target.word_size);
       true
-    ) else false
   in
-  let unalign_stack was_aligned =
-    if was_aligned then emit addi SP SP Target.word_size
-  in
-
+  let unalign_stack was_aligned = if was_aligned then emit addi SP SP Target.word_size in
   match cexpr with
   | Comp_imm imm ->
     let* () = gen_im_expr state dst imm in
@@ -173,7 +171,6 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
     let live_regs_to_save = save_live_regs state in
     (* Align stack based on saved regs count before calling *)
     let is_padded = align_stack (List.length live_regs_to_save) in
-
     let* state_after_call =
       let apply_chain closure_reg args st =
         let rec loop current_closure_reg_inner = function
@@ -203,7 +200,6 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
             | Some n when List.length args_imms = n ->
               let num_args = List.length args_imms in
               let num_reg_args = Array.length Target.arg_regs in
-              
               let* () =
                 List.fold_left
                   (fun acc_res arg_imm ->
@@ -215,7 +211,6 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
                   (ok ())
                   args_imms
               in
-              
               List.iteri
                 (fun i _ ->
                    if i < num_reg_args
@@ -224,20 +219,15 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
                      let stack_offset = (num_args - 1 - i) * Target.word_size in
                      emit ld arg_reg (SP, stack_offset)))
                 args_imms;
-              
               (*  (fixed) Pop args that are now in registers! 
                  This restores stack pointer and alignment. *)
               let args_in_regs = min num_args num_reg_args in
-              if args_in_regs > 0 then
-                emit addi SP SP (args_in_regs * Target.word_size);
-              
+              if args_in_regs > 0 then emit addi SP SP (args_in_regs * Target.word_size);
               emit call fname;
               emit mv (T 0) (A 0);
-              
               let num_stack_args = max 0 (num_args - num_reg_args) in
               if num_stack_args > 0
               then emit addi SP SP (num_stack_args * Target.word_size);
-              
               ok state
             | Some n when List.length args_imms < n ->
               let m = List.length args_imms in
@@ -249,14 +239,19 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
                      emit sd (T 1) (SP, i * Target.word_size);
                      ok ())
                   args_imms
-                |> List.fold_left (fun acc r -> let* () = acc in r) (ok ())
+                |> List.fold_left
+                     (fun acc r ->
+                        let* () = acc in
+                        r)
+                     (ok ())
               in
               emit la (A 0) fname;
               emit li (A 1) n;
               emit call "alloc_closure";
               emit mv (T 0) (A 0);
               let rec apply_saved i =
-                if i >= m then ok ()
+                if i >= m
+                then ok ()
                 else (
                   emit ld (T 1) (SP, i * Target.word_size);
                   emit mv (A 0) (T 0);
@@ -276,7 +271,6 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
     restore_live_regs live_regs_to_save;
     if not (equal_reg dst (T 0)) then emit mv dst (T 0);
     ok state_after_call
-
   | Comp_branch (cond_imm, then_anf, else_anf) ->
     let* () = gen_im_expr state (T 0) cond_imm in
     let lbl_else, state_after_labels = fresh_label "else" state in
@@ -289,7 +283,6 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
     emit label lbl_end;
     let final_stack_offset = min state_then.stack_offset state_else.stack_offset in
     ok { final_state with stack_offset = final_stack_offset }
-
   | Comp_func (params, body) ->
     let func_label, state = fresh_label "lambda" state in
     let arity' = ArityMap.bind state.arity func_label (List.length params) in
@@ -304,72 +297,56 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
     emit call "alloc_closure";
     if not (equal_reg dst (A 0)) then emit mv dst (A 0);
     ok state
-
   | Comp_tuple imms | Comp_alloc imms ->
     emit addi SP SP (-Target.word_size);
-
     let live_regs = save_live_regs state in
     let live_count = List.length live_regs in
-
     (* Align stack: total pushed = 1 (result slot) + live_count *)
     let total_pushed = 1 + live_count in
     let is_padded = align_stack total_pushed in
-
     let len = List.length imms in
     emit li (A 0) len;
-    emit call "create_tuple"; 
-
+    emit call "create_tuple";
     unalign_stack is_padded;
-
     (* Save result to slot (offset = live_count * 8) *)
     emit sd (A 0) (SP, live_count * Target.word_size);
-
     restore_live_regs live_regs;
-
     (* Fill tuple *)
     let* () =
       List.mapi
         (fun i imm ->
            let* () = gen_im_expr state (T 1) imm in
-           emit ld (T 2) (SP, 0); 
+           emit ld (T 2) (SP, 0);
            emit addi (T 2) (T 2) 16;
            emit sd (T 1) (T 2, i * Target.word_size);
            ok ())
         imms
-      |> List.fold_left (fun acc r -> let* () = acc in r) (ok ())
+      |> List.fold_left
+           (fun acc r ->
+              let* () = acc in
+              r)
+           (ok ())
     in
-
     emit ld dst (SP, 0);
     emit addi SP SP Target.word_size;
-    
     ok state
-
   | Comp_load (addr_imm, offset) ->
     (* Save live regs *)
     let live_regs = save_live_regs state in
-    
     let is_padded = align_stack (List.length live_regs) in
-
     let* () = gen_im_expr state (A 0) addr_imm in
     let index = offset / Target.word_size in
-    emit li (A 1) index;                          
-    
+    emit li (A 1) index;
     emit call "field";
-    
     (* Unalign *)
     unalign_stack is_padded;
-
     if not (equal_reg dst (A 0)) then emit mv dst (A 0);
-
     (* Handle reg restore safely: save result to stack *)
     emit addi SP SP (-Target.word_size);
     emit sd (A 0) (SP, 0);
-    
     restore_live_regs live_regs;
-    
     emit ld dst (SP, 0);
     emit addi SP SP Target.word_size;
-
     ok state
 ;;
 

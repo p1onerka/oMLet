@@ -334,19 +334,16 @@ and gen_comp_expr (state : cg_state) (dst : reg) (cexpr : comp_expr) : cg_state 
     (* Save live regs *)
     let live_regs = save_live_regs state in
     let is_padded = align_stack (List.length live_regs) in
+    (* засунуть адрес тупла в a0 *)
     let* () = gen_im_expr state (A 0) addr_imm in
     let index = offset / Target.word_size in
     emit li (A 1) index;
     emit call "field";
     (* Unalign *)
     unalign_stack is_padded;
-    if not (equal_reg dst (A 0)) then emit mv dst (A 0);
-    (* Handle reg restore safely: save result to stack *)
-    emit addi SP SP (-Target.word_size);
-    emit sd (A 0) (SP, 0);
+    emit mv (T 0) (A 0);
     restore_live_regs live_regs;
-    emit ld dst (SP, 0);
-    emit addi SP SP Target.word_size;
+    if not (equal_reg dst (T 0)) then emit mv dst (T 0);
     ok state
 ;;
 

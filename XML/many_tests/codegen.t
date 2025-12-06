@@ -1337,7 +1337,7 @@
   $ riscv64-linux-gnu-as -march=rv64gc tuple_swap.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
-  1
+  2
 
   $ ../bin/XML.exe -o tuple_order.s <<EOF
   > let f n =
@@ -1364,10 +1364,7 @@
   $ riscv64-linux-gnu-as -march=rv64gc tuple_linked_list.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
-  field: attempt to access field of an integer
-  Aborted (core dumped)
-  [134]
-  pizdec
+  60
 
   $ ../bin/XML.exe -o tuple_large.s <<EOF
   > let main =
@@ -1410,8 +1407,7 @@
   $ riscv64-linux-gnu-as -march=rv64gc tuple_arg.s -o temp.o
   $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
-  23456253149232
-  pizdec, smth is wrong with alignment
+  42
 
   $ ../bin/XML.exe -o tuple_gc_stress.s <<EOF
   > let rec make_list n acc =
@@ -1557,10 +1553,6 @@
     li a1, 0
     call field
     mv t0, a0
-    addi sp, sp, -8
-    sd a0, 0(sp)
-    ld t0, 0(sp)
-    addi sp, sp, 8
     sd t0, -48(s0)
     ld t0, -48(s0)
     sd t0, -56(s0)
@@ -1568,10 +1560,6 @@
     li a1, 1
     call field
     mv t0, a0
-    addi sp, sp, -8
-    sd a0, 0(sp)
-    ld t0, 0(sp)
-    addi sp, sp, 8
     sd t0, -64(s0)
     ld t0, -64(s0)
     sd t0, -72(s0)

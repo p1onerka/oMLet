@@ -30,6 +30,7 @@
   fewtests/closure/03adder.ml
   fewtests/closure/04plusss.ml
   fewtests/closure/05fibcps.ml
+  fewtests/tuples/01adder.ml
   manytests/do_not_type/001.ml
   manytests/do_not_type/002if.ml
   manytests/do_not_type/003occurs.ml

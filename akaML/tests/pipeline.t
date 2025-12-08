@@ -236,3 +236,26 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    collections: 2
   GC    allocations: 196
   =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/01adder.ml -o 01adder.s
+  $ riscv64-linux-gnu-as -march=rv64gc 01adder.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  === GC Status ===
+  Current allocated: 4
+  Free        space: 1796
+  Heap         size: 1800
+  Current      bank: 0
+  Total   allocated: 4
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  3=== GC Status ===
+  Current allocated: 4
+  Free        space: 1796
+  Heap         size: 1800
+  Current      bank: 1
+  Total   allocated: 4
+  GC    collections: 1
+  GC    allocations: 1
+  =================

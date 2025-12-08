@@ -841,6 +841,10 @@ let gc_schemes =
   ; "get_heap_start", Scheme (VarSet.empty, Type_arrow (Type_unit, Type_int))
   ; "get_heap_final", Scheme (VarSet.empty, Type_arrow (Type_unit, Type_int))
   ; "print_gc_status", Scheme (VarSet.empty, Type_arrow (Type_unit, Type_unit))
+  ; ( "field"
+    , Scheme
+        ( VarSet.empty
+        , Type_arrow (Type_tuple (Type_var "'a", Type_int, []), Type_var "'b") ) )
   ]
 ;;
 

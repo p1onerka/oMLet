@@ -94,9 +94,29 @@ let gen_ident =
   return ("temp" ^ Int.to_string fresh_var)
 ;;
 
-let anf_pat = function
-  | Pat_var var -> return @@ APat_var var
-  | Pat_constant const -> return @@ APat_constant const
+let anf_pat pat acc =
+  match pat with
+  | Pat_var var -> return @@ (APat_var var, acc)
+  | Pat_constant const -> return @@ (APat_constant const, acc)
+  | Pat_tuple (pat1, pat2, pat_list) ->
+    let* var = gen_ident in
+    let* acc =
+      List.fold_right
+        (List.mapi ~f:(fun i p -> i, p) (pat1 :: pat2 :: pat_list))
+        ~f:(fun (index, p) acc ->
+          let* body = acc in
+          return
+          @@ AExp_let
+               ( Nonrecursive
+               , p
+               , CExp_apply
+                   ( IExp_ident "field"
+                   , IExp_ident var
+                   , [ IExp_constant (Const_integer index) ] )
+               , body ))
+        ~init:(return acc)
+    in
+    return @@ (APat_var var, acc)
   | _ -> fail "Pat: Not implemented"
 ;;
 
@@ -182,11 +202,11 @@ let rec anf_exp exp k =
   | Exp_fun (pat, pat_list, body) ->
     let* body_aexp = anf_exp body (fun i_body -> a_exp_let_non (i_to_c_exp i_body) k) in
     let* folded =
-      Base.List.fold_right
+      List.fold_right
         ~init:(return body_aexp)
-        ~f:(fun p acc ->
+        ~f:(fun pat acc ->
           let* acc = acc in
-          let* i_pat = anf_pat p in
+          let* i_pat, acc = anf_pat pat acc in
           return @@ ACExp (CIExp (IExp_fun (i_pat, acc))))
         (pat :: pat_list)
     in

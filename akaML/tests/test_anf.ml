@@ -105,6 +105,23 @@ let%expect_test "ANF tuple" =
   |}]
 ;;
 
+let%expect_test "ANF tuple pattern" =
+  run
+    {|
+  let f a (b, c) = a (b, c);;
+  |};
+  [%expect
+    {|
+    let f =
+      fun a ->
+        (fun temp3 ->
+           (let b = field temp3 0 in
+           let c = field temp3 1 in
+           let temp0 = b, c in
+           a temp0));;
+  |}]
+;;
+
 let%expect_test "ANF function with 2 arguments" =
   run
     {|

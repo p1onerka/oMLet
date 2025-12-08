@@ -401,6 +401,16 @@ and gen_c_exp env dst = function
     let* _ = gen_a_exp env dst else_e in
     emit label end_lbl;
     return env
+  | CExp_tuple (exp1, exp2, exp_list) ->
+    let exps = exp1 :: exp2 :: exp_list in
+    emit li (A 0) (List.length exps);
+    List.iteri
+      ~f:(fun i -> function
+         | IExp_constant (Const_integer n) -> emit li (A (i + 1)) (to_tag_integer n)
+         | _ -> ())
+      exps;
+    emit call "create_tuple";
+    return env
   | _ -> fail "GenCExp: Not implemented"
 
 and gen_a_exp env dst = function

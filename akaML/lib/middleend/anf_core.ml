@@ -94,7 +94,7 @@ let gen_ident =
   return ("temp" ^ Int.to_string fresh_var)
 ;;
 
-let anf_pat pat acc =
+let rec anf_pat pat acc =
   match pat with
   | Pat_var var -> return @@ (APat_var var, acc)
   | Pat_constant const -> return @@ (APat_constant const, acc)
@@ -103,17 +103,23 @@ let anf_pat pat acc =
     let* acc =
       List.fold_right
         (List.mapi ~f:(fun i p -> i, p) (pat1 :: pat2 :: pat_list))
-        ~f:(fun (index, p) acc ->
+        ~f:(fun (index, pat) acc ->
           let* body = acc in
+          let* a_pat, acc = anf_pat pat body in
+          let pat =
+            match a_pat with
+            | APat_var var -> Pat_var var
+            | APat_constant const -> Pat_constant const
+          in
           return
           @@ AExp_let
                ( Nonrecursive
-               , p
+               , pat
                , CExp_apply
                    ( IExp_ident "field"
                    , IExp_ident var
                    , [ IExp_constant (Const_integer index) ] )
-               , body ))
+               , acc ))
         ~init:(return acc)
     in
     return @@ (APat_var var, acc)
@@ -199,6 +205,19 @@ let rec anf_exp exp k =
       anf_exp exp2 (fun i_exp2 ->
         let c_exp = CExp_tuple (i_exp1, i_exp2, []) in
         a_exp_let_non c_exp k))
+  | Exp_tuple (exp1, exp2, exp_list) ->
+    let rec aux exps acc_r k =
+      match exps with
+      | [] ->
+        let acc = List.rev acc_r in
+        (match acc with
+         | i_exp1 :: i_exp2 :: i_exp_list ->
+           let c_exp = CExp_tuple (i_exp1, i_exp2, i_exp_list) in
+           a_exp_let_non c_exp k
+         | _ -> assert false)
+      | exp :: rest -> anf_exp exp (fun i_exp -> aux rest (i_exp :: acc_r) k)
+    in
+    aux (exp1 :: exp2 :: exp_list) [] k
   | Exp_fun (pat, pat_list, body) ->
     let* body_aexp = anf_exp body (fun i_body -> a_exp_let_non (i_to_c_exp i_body) k) in
     let* folded =
@@ -206,8 +225,8 @@ let rec anf_exp exp k =
         ~init:(return body_aexp)
         ~f:(fun pat acc ->
           let* acc = acc in
-          let* i_pat, acc = anf_pat pat acc in
-          return @@ ACExp (CIExp (IExp_fun (i_pat, acc))))
+          let* a_pat, acc = anf_pat pat acc in
+          return @@ ACExp (CIExp (IExp_fun (a_pat, acc))))
         (pat :: pat_list)
     in
     return folded

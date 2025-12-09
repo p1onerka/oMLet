@@ -112,13 +112,56 @@ let%expect_test "ANF tuple pattern" =
   |};
   [%expect
     {|
-    let f =
-      fun a ->
-        (fun temp3 ->
-           (let b = field temp3 0 in
-           let c = field temp3 1 in
-           let temp0 = b, c in
-           a temp0));;
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let b = field temp3 0 in
+         let c = field temp3 1 in
+         let temp0 = b, c in
+         a temp0));;
+  |}]
+;;
+
+let%expect_test "ANF nested tuple pattern" =
+  run
+    {|
+  let f a (b, (c, (d, e)), f) = a (b, c);;
+  let a = g (1, (2, 3), 4);;
+  |};
+  [%expect
+    {|
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let b = field temp3 0 in
+         let temp4 = field temp3 1 in
+         let c = field temp4 0 in
+         let temp5 = field temp4 1 in
+         let d = field temp5 0 in
+         let e = field temp5 1 in
+         let f = field temp3 2 in
+         let temp0 = b, c in
+         a temp0));;
+  let a = let temp6 = 2, 3 in
+          let temp7 = 1, temp6, 4 in
+          g temp7;;
+  |}]
+;;
+
+let%expect_test "ANF tuple pattern with numbers" =
+  run
+    {|
+  let f a (1, 2) = a (1 + 2);;
+  |};
+  [%expect
+    {|
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let 1 = field temp3 0 in
+         let 2 = field temp3 1 in
+         let temp0 = 1 + 2 in
+         a temp0));;
   |}]
 ;;
 

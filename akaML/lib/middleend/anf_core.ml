@@ -94,35 +94,37 @@ let gen_ident =
   return ("temp" ^ Int.to_string fresh_var)
 ;;
 
+let a_pat_to_pat = function
+  | APat_var var -> Pat_var var
+  | APat_constant const -> Pat_constant const
+;;
+
 let rec anf_pat pat acc =
   match pat with
-  | Pat_var var -> return @@ (APat_var var, acc)
-  | Pat_constant const -> return @@ (APat_constant const, acc)
+  | Pat_var var -> return (APat_var var, acc)
+  | Pat_constant const -> return (APat_constant const, acc)
   | Pat_tuple (pat1, pat2, pat_list) ->
     let* var = gen_ident in
-    let* acc =
+    let pats = pat1 :: pat2 :: pat_list in
+    let* acc, _ =
       List.fold_right
-        (List.mapi ~f:(fun i p -> i, p) (pat1 :: pat2 :: pat_list))
-        ~f:(fun (index, pat) acc ->
-          let* body = acc in
+        ~init:(return (acc, List.length pats - 1))
+        ~f:(fun pat acc ->
+          let* body, index = acc in
           let* a_pat, acc = anf_pat pat body in
-          let pat =
-            match a_pat with
-            | APat_var var -> Pat_var var
-            | APat_constant const -> Pat_constant const
-          in
           return
-          @@ AExp_let
-               ( Nonrecursive
-               , pat
-               , CExp_apply
-                   ( IExp_ident "field"
-                   , IExp_ident var
-                   , [ IExp_constant (Const_integer index) ] )
-               , acc ))
-        ~init:(return acc)
+            ( AExp_let
+                ( Nonrecursive
+                , a_pat_to_pat a_pat
+                , CExp_apply
+                    ( IExp_ident "field"
+                    , IExp_ident var
+                    , [ IExp_constant (Const_integer index) ] )
+                , acc )
+            , index - 1 ))
+        pats
     in
-    return @@ (APat_var var, acc)
+    return (APat_var var, acc)
   | _ -> fail "Pat: Not implemented"
 ;;
 
@@ -160,9 +162,10 @@ let rec anf_exp exp k =
   | Exp_let (_, { pat = Pat_construct ("()", None); exp }, _, body) ->
     anf_exp exp (fun _ -> anf_exp body k)
   | Exp_let (flag, { pat; exp }, _, body) ->
-    anf_exp exp (fun a ->
+    anf_exp exp (fun i_exp ->
       let* body_aexp = anf_exp body k in
-      return (AExp_let (flag, pat, i_to_c_exp a, body_aexp)))
+      let* a_pat, a_exp = anf_pat pat body_aexp in
+      return (AExp_let (flag, a_pat_to_pat a_pat, i_to_c_exp i_exp, a_exp)))
   | Exp_apply (Exp_apply (Exp_ident opr, exp1), exp2) when is_bin_op opr ->
     anf_exp exp1 (fun i_exp1 ->
       anf_exp exp2 (fun i_exp2 ->
@@ -200,11 +203,6 @@ let rec anf_exp exp k =
       let* else_aexp = anf_exp else_exp i_to_a_exp in
       let c_exp = CExp_ifthenelse (i_to_c_exp i_cond, then_aexp, Some else_aexp) in
       a_exp_let_non c_exp k)
-  | Exp_tuple (exp1, exp2, []) ->
-    anf_exp exp1 (fun i_exp1 ->
-      anf_exp exp2 (fun i_exp2 ->
-        let c_exp = CExp_tuple (i_exp1, i_exp2, []) in
-        a_exp_let_non c_exp k))
   | Exp_tuple (exp1, exp2, exp_list) ->
     let rec aux exps acc_r k =
       match exps with
@@ -234,17 +232,37 @@ let rec anf_exp exp k =
   | _ -> fail "Exp: Not implemented"
 ;;
 
+let rec a_let_to_value = function
+  | AExp_let (rec_flag, pat, exp, body) ->
+    let sub, a_exp = a_let_to_value body in
+    AStruct_value (rec_flag, pat, ACExp exp) :: sub, a_exp
+  | a_exp -> [], a_exp
+;;
+
 let anf_structure_item = function
   | Struct_eval exp ->
-    let* ae = anf_exp exp i_to_a_exp in
-    return [ AStruct_eval ae ]
+    let* a_exp = anf_exp exp i_to_a_exp in
+    return [ AStruct_eval a_exp ]
   | Struct_value (rec_flag, vb, vbs) ->
     let bindings = vb :: vbs in
     let* items =
-      state_map
+      state_concat_map
         (fun { pat; exp } ->
-           let* ae = anf_exp exp i_to_a_exp in
-           return (AStruct_value (rec_flag, pat, ae)))
+           let* a_exp = anf_exp exp i_to_a_exp in
+           match pat with
+           | Pat_tuple _ ->
+             (* the tuple itself broken down by atoms (exp_main_tuple - the topmost one) *)
+             let struct_tuples, exp_main_tuple = a_let_to_value a_exp in
+             (* a dummy to get rid of the re-generation of the tuple itself *)
+             let a_exp_dummy = ACExp (CIExp IExp_unit) in
+             let* a_pat, a_exp = anf_pat pat a_exp_dummy in
+             (* tuple arguments *)
+             let structs_args, _ = a_let_to_value a_exp in
+             return
+               (struct_tuples
+                @ [ AStruct_value (rec_flag, a_pat_to_pat a_pat, exp_main_tuple) ]
+                @ structs_args)
+           | _ -> return [ AStruct_value (rec_flag, pat, a_exp) ])
         bindings
     in
     return items

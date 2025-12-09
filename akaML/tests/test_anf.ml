@@ -165,6 +165,52 @@ let%expect_test "ANF tuple pattern with numbers" =
   |}]
 ;;
 
+let%expect_test "ANF tuple as left value" =
+  run
+    {|
+  let (a, b) = (1, 2);;
+  let f =
+    let (c, d) = (3, 4) in
+    (c, d)
+  ;;
+  |};
+  [%expect
+    {|
+  let temp1 = 1, 2;;
+  let a = field temp1 0;;
+  let b = field temp1 1;;
+  let f =
+    let temp4 = 3, 4 in
+    let c = field temp4 0 in
+    let d = field temp4 1 in
+    c, d;;
+  |}]
+;;
+
+let%expect_test "ANF nested tuple as left value" =
+  run
+    {|
+  let f = 1, (2, (3, 4)), 5;;
+  let a, (b, (c, d)), e = 1, (2, (3, 4)), 5;;
+  |};
+  [%expect
+    {|
+  let f = let temp0 = 3, 4 in
+          let temp1 = 2, temp0 in
+          1, temp1, 5;;
+  let temp3 = 3, 4;;
+  let temp4 = 2, temp3;;
+  let temp6 = 1, temp4, 5;;
+  let a = field temp6 0;;
+  let temp7 = field temp6 1;;
+  let b = field temp7 0;;
+  let temp8 = field temp7 1;;
+  let c = field temp8 0;;
+  let d = field temp8 1;;
+  let e = field temp6 2;;
+  |}]
+;;
+
 let%expect_test "ANF function with 2 arguments" =
   run
     {|

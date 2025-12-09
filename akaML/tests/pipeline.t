@@ -277,3 +277,26 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   3
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/05gc.ml -o 05gc.s
+  $ riscv64-linux-gnu-as -march=rv64gc 05gc.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  3=== GC Status ===
+  Current allocated: 45
+  Free        space: 1755
+  Heap         size: 1800
+  Current      bank: 0
+  Total   allocated: 45
+  GC    collections: 0
+  GC    allocations: 3
+  =================
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 1800
+  Heap         size: 1800
+  Current      bank: 1
+  Total   allocated: 45
+  GC    collections: 1
+  GC    allocations: 3
+  =================

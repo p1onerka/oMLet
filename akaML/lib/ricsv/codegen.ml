@@ -254,6 +254,24 @@ let rec gen_i_exp env dst = function
         | _ -> fail ("unbound variable: " ^ x)))
   | _ -> fail "GenIExp: Not implemented"
 
+(* helper: push stack args (those exceeding register count) *)
+and push_stack_args env stack_args =
+  let stack_count = List.length stack_args in
+  if stack_count = 0
+  then return (env, 0)
+  else (
+    let stack_bytes = stack_count * Platform.word_size in
+    emit addi SP SP (-stack_bytes) ~comm:"Stack space for variadic args";
+    let* env =
+      List.foldi stack_args ~init:(return env) ~f:(fun i acc arg ->
+        let* env = acc in
+        let offset = i * Platform.word_size in
+        let* env = gen_i_exp env (T 0) arg in
+        emit sd (T 0) (SP, offset);
+        return env)
+    in
+    return (env, stack_bytes))
+
 and gen_c_exp env dst = function
   | CIExp i_exp -> gen_i_exp env dst i_exp
   | CExp_apply (IExp_ident fname, IExp_unit, []) ->
@@ -320,24 +338,6 @@ and gen_c_exp env dst = function
             let* env = gen_i_exp env reg arg in
             return env)
     in
-    (* helper: push stack args (those exceeding register count) *)
-    let push_stack_args env stack_args =
-      let stack_count = List.length stack_args in
-      if stack_count = 0
-      then return (env, 0)
-      else (
-        let stack_bytes = stack_count * Platform.word_size in
-        emit addi SP SP (-stack_bytes) ~comm:"Stack space for variadic args";
-        let* env =
-          List.foldi stack_args ~init:(return env) ~f:(fun i acc arg ->
-            let* env = acc in
-            let offset = i * Platform.word_size in
-            let* env = gen_i_exp env (T 0) arg in
-            emit sd (T 0) (SP, offset);
-            return env)
-        in
-        return (env, stack_bytes))
-    in
     let arity = Map.find state.arity_map fname in
     (match List.length args, arity with
      (* Branch in which the arity of fname is known and is less than args_received *)
@@ -403,15 +403,23 @@ and gen_c_exp env dst = function
     return env
   | CExp_tuple (exp1, exp2, exp_list) ->
     let exps = exp1 :: exp2 :: exp_list in
-    emit li (A 0) (List.length exps);
+    let count_arg = List.length exps in
+    let count_reg = Platform.arg_regs_count - 1 in
+    emit li (A 0) count_arg;
     let* env =
-      List.fold_left
-        (List.mapi ~f:(fun i exp -> i, exp) exps)
-        ~f:(fun acc_env (i, exp) ->
-          let* env = acc_env in
-          gen_i_exp env (A (i + 1)) exp)
+      List.foldi
         ~init:(return env)
+        ~f:(fun i acc_env exp ->
+          if i < count_reg
+          then
+            let* env = acc_env in
+            gen_i_exp env (A (i + 1)) exp
+          else acc_env)
+        exps
     in
+    let diff_count = count_arg - count_reg in
+    let stack_args = List.drop exps diff_count in
+    let* env, _ = push_stack_args env stack_args in
     emit call "create_tuple";
     return env
   | _ -> fail "GenCExp: Not implemented"

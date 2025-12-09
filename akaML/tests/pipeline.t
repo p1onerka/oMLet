@@ -265,3 +265,15 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
   3
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/03args.ml -o 03args.s
+  $ riscv64-linux-gnu-as -march=rv64gc 03args.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  1
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/04lv.ml -o 04lv.s
+  $ riscv64-linux-gnu-as -march=rv64gc 04lv.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  3

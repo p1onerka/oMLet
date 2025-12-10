@@ -35,6 +35,7 @@
   fewtests/tuples/03args.ml
   fewtests/tuples/04lv.ml
   fewtests/tuples/05gc.ml
+  fewtests/tuples/06closure.ml
   manytests/do_not_type/001.ml
   manytests/do_not_type/002if.ml
   manytests/do_not_type/003occurs.ml

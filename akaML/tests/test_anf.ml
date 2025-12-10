@@ -105,6 +105,112 @@ let%expect_test "ANF tuple" =
   |}]
 ;;
 
+let%expect_test "ANF tuple pattern" =
+  run
+    {|
+  let f a (b, c) = a (b, c);;
+  |};
+  [%expect
+    {|
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let b = field temp3 0 in
+         let c = field temp3 1 in
+         let temp0 = b, c in
+         a temp0));;
+  |}]
+;;
+
+let%expect_test "ANF nested tuple pattern" =
+  run
+    {|
+  let f a (b, (c, (d, e)), f) = a (b, c);;
+  let a = g (1, (2, 3), 4);;
+  |};
+  [%expect
+    {|
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let b = field temp3 0 in
+         let temp4 = field temp3 1 in
+         let c = field temp4 0 in
+         let temp5 = field temp4 1 in
+         let d = field temp5 0 in
+         let e = field temp5 1 in
+         let f = field temp3 2 in
+         let temp0 = b, c in
+         a temp0));;
+  let a = let temp6 = 2, 3 in
+          let temp7 = 1, temp6, 4 in
+          g temp7;;
+  |}]
+;;
+
+let%expect_test "ANF tuple pattern with numbers" =
+  run
+    {|
+  let f a (1, 2) = a (1 + 2);;
+  |};
+  [%expect
+    {|
+  let f =
+    fun a ->
+      (fun temp3 ->
+         (let 1 = field temp3 0 in
+         let 2 = field temp3 1 in
+         let temp0 = 1 + 2 in
+         a temp0));;
+  |}]
+;;
+
+let%expect_test "ANF tuple as left value" =
+  run
+    {|
+  let (a, b) = (1, 2);;
+  let f =
+    let (c, d) = (3, 4) in
+    (c, d)
+  ;;
+  |};
+  [%expect
+    {|
+  let temp1 = 1, 2;;
+  let a = field temp1 0;;
+  let b = field temp1 1;;
+  let f =
+    let temp4 = 3, 4 in
+    let c = field temp4 0 in
+    let d = field temp4 1 in
+    c, d;;
+  |}]
+;;
+
+let%expect_test "ANF nested tuple as left value" =
+  run
+    {|
+  let f = 1, (2, (3, 4)), 5;;
+  let a, (b, (c, d)), e = 1, (2, (3, 4)), 5;;
+  |};
+  [%expect
+    {|
+  let f = let temp0 = 3, 4 in
+          let temp1 = 2, temp0 in
+          1, temp1, 5;;
+  let temp3 = 3, 4;;
+  let temp4 = 2, temp3;;
+  let temp6 = 1, temp4, 5;;
+  let a = field temp6 0;;
+  let temp7 = field temp6 1;;
+  let b = field temp7 0;;
+  let temp8 = field temp7 1;;
+  let c = field temp8 0;;
+  let d = field temp8 1;;
+  let e = field temp6 2;;
+  |}]
+;;
+
 let%expect_test "ANF function with 2 arguments" =
   run
     {|

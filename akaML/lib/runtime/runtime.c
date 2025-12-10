@@ -16,7 +16,7 @@ void print_int(long n) { printf("%ld", TO_ML_INTEGER(n)); }
 /* ========== Garbage Collector ========== */
 
 int SIZE_HEAP = 1800;
-const uint8_t TAG_NUMBER = 0;
+const uint8_t TAG_TUPLE = 0;
 const uint8_t TAG_CLOSURE = 247;
 
 // [63-49: size] [48-41: tag] [40-0: value]
@@ -155,7 +155,7 @@ static uint64_t *copy_object(uint64_t *obj) {
   *(GC.ptr_base) = SET_HEADER(size, tag);
   uint64_t *obj_sub = GC.ptr_base + 1;
 
-  if (tag == TAG_CLOSURE) {
+  if (tag == TAG_CLOSURE || tag == TAG_TUPLE) {
     for (uint64_t i = 0; i < size; i++) {
       obj_sub[i] = obj[i];
     }
@@ -418,3 +418,35 @@ void *applyN(closure *f, int64_t argc, ...) {
 
   return new_closure;
 }
+
+/* ========== Tuple ========== */
+
+typedef struct {
+  int64_t arity;
+  void *args[];
+} tuple;
+
+tuple *create_tuple(int64_t argc, ...) {
+  assert(argc >= 0);
+  va_list args;
+  va_start(args, argc);
+
+  va_list argp;
+  va_start(argp, argc);
+
+  size_t size_in_bytes = sizeof(tuple) + argc * sizeof(void *);
+  uint64_t size_in_words =
+      ((uint64_t)size_in_bytes + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+  tuple *t = (tuple *)gc_alloc(size_in_words, TAG_TUPLE);
+
+  t->arity = argc;
+  for (int i = 0; i < t->arity; i++) {
+    t->args[i] = va_arg(argp, void *);
+  }
+
+  va_end(argp);
+
+  return t;
+}
+
+void *field(tuple *t, long n) { return t->args[TO_ML_INTEGER(n)]; }

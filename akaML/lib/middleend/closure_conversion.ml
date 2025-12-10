@@ -211,7 +211,13 @@ let cc_structure_item globals env = function
 
 let stdlib_globals =
   of_list
-    ([ "print_int"; "collect"; "get_heap_start"; "get_heap_final"; "print_gc_status" ]
+    ([ "print_int"
+     ; "collect"
+     ; "get_heap_start"
+     ; "get_heap_final"
+     ; "print_gc_status"
+     ; "field"
+     ]
      @ un_op_list
      @ bin_op_list)
 ;;

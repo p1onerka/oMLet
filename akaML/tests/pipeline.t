@@ -236,3 +236,73 @@ SPDX-License-Identifier: LGPL-3.0-or-later
   GC    collections: 2
   GC    allocations: 196
   =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/01adder.ml -o 01adder.s
+  $ riscv64-linux-gnu-as -march=rv64gc 01adder.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  === GC Status ===
+  Current allocated: 4
+  Free        space: 1796
+  Heap         size: 1800
+  Current      bank: 0
+  Total   allocated: 4
+  GC    collections: 0
+  GC    allocations: 1
+  =================
+  3=== GC Status ===
+  Current allocated: 4
+  Free        space: 1796
+  Heap         size: 1800
+  Current      bank: 1
+  Total   allocated: 4
+  GC    collections: 1
+  GC    allocations: 1
+  =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/02nested.ml -o 02nested.s
+  $ riscv64-linux-gnu-as -march=rv64gc 02nested.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  3
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/03args.ml -o 03args.s
+  $ riscv64-linux-gnu-as -march=rv64gc 03args.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  1
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/04lv.ml -o 04lv.s
+  $ riscv64-linux-gnu-as -march=rv64gc 04lv.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  3
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/05gc.ml -o 05gc.s
+  $ riscv64-linux-gnu-as -march=rv64gc 05gc.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  3=== GC Status ===
+  Current allocated: 45
+  Free        space: 1755
+  Heap         size: 1800
+  Current      bank: 0
+  Total   allocated: 45
+  GC    collections: 0
+  GC    allocations: 3
+  =================
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 1800
+  Heap         size: 1800
+  Current      bank: 1
+  Total   allocated: 45
+  GC    collections: 1
+  GC    allocations: 3
+  =================
+
+  $ ../bin/akaML.exe -gc -fromfile fewtests/tuples/06closure.ml -o 06closure.s
+  $ riscv64-linux-gnu-as -march=rv64gc 06closure.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o ../lib/runtime/rv64_gc_runtime.a -o file.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./file.exe
+  1

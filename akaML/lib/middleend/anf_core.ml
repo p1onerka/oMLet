@@ -204,18 +204,16 @@ let rec anf_exp exp k =
       let c_exp = CExp_ifthenelse (i_to_c_exp i_cond, then_aexp, Some else_aexp) in
       a_exp_let_non c_exp k)
   | Exp_tuple (exp1, exp2, exp_list) ->
-    let rec aux exps acc_r k =
-      match exps with
-      | [] ->
-        let acc = List.rev acc_r in
-        (match acc with
-         | i_exp1 :: i_exp2 :: i_exp_list ->
-           let c_exp = CExp_tuple (i_exp1, i_exp2, i_exp_list) in
-           a_exp_let_non c_exp k
-         | _ -> assert false)
-      | exp :: rest -> anf_exp exp (fun i_exp -> aux rest (i_exp :: acc_r) k)
+    let rec anf_list exp_list k =
+      match exp_list with
+      | [] -> k []
+      | e :: es -> anf_exp e (fun i -> anf_list es (fun is -> k (i :: is)))
     in
-    aux (exp1 :: exp2 :: exp_list) [] k
+    anf_exp exp1 (fun i_exp1 ->
+      anf_exp exp2 (fun i_exp2 ->
+        anf_list exp_list (fun i_exp_list ->
+          let c_exp = CExp_tuple (i_exp1, i_exp2, i_exp_list) in
+          a_exp_let_non c_exp k)))
   | Exp_fun (pat, pat_list, body) ->
     let* body_aexp = anf_exp body (fun i_body -> a_exp_let_non (i_to_c_exp i_body) k) in
     let* folded =

@@ -29,10 +29,12 @@
     sd t0, -16(s0)
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     ld t0, -16(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call fac
     mv t0, a0
     addi sp, sp, 8
@@ -66,17 +68,17 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call fac
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -8(s0)
     ld t0, -8(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -16(s0)
     ld a0, -16(s0)
     addi sp, s0, 16
@@ -121,10 +123,12 @@
     sd t0, -16(s0)
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     ld t0, -16(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call fib
     mv t0, a0
     addi sp, sp, 8
@@ -138,10 +142,12 @@
     sd t0, -32(s0)
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     ld t0, -32(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call fib
     mv t0, a0
     addi sp, sp, 8
@@ -172,17 +178,17 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call fib
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -8(s0)
     ld t0, -8(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -16(s0)
     ld a0, -16(s0)
     addi sp, s0, 16
@@ -223,10 +229,12 @@
     beq t0, zero, else_0
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     li t0, 1
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
     addi sp, sp, 8
@@ -238,10 +246,12 @@
   else_0:
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     li t0, 3
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
     addi sp, sp, 8
@@ -257,10 +267,10 @@
     ld s0, 0(s0)
     ret
   main:
-    addi sp, sp, -104
-    sd ra, 96(sp)
-    sd s0, 88(sp)
-    addi s0, sp, 88
+    addi sp, sp, -112
+    sd ra, 104(sp)
+    sd s0, 96(sp)
+    addi s0, sp, 96
     li a0, 5120
     call rt_init
     li t0, 1
@@ -282,48 +292,52 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -16(s0)
+    ld t0, -16(s0)
+    sd t0, -24(s0)
     li t0, 3
     li t1, 3
     xor t2, t0, t1
     seqz t0, t2
-    sd t0, -24(s0)
-    ld t0, -24(s0)
-  endif_3:
     sd t0, -32(s0)
     ld t0, -32(s0)
+  endif_3:
+    sd t0, -40(s0)
+    ld t0, -40(s0)
     beq t0, zero, else_4
     li t0, 1
     j endif_5
   else_4:
     li t0, 3
   endif_5:
-    sd t0, -40(s0)
-    ld t0, -40(s0)
+    sd t0, -48(s0)
+    ld t0, -48(s0)
     li t1, 3
     xor t2, t0, t1
     seqz t0, t2
-    sd t0, -48(s0)
-    ld t0, -48(s0)
+    sd t0, -56(s0)
+    ld t0, -56(s0)
     beq t0, zero, else_6
     li t0, 1
     j endif_7
   else_6:
     li t0, 3
   endif_7:
-    sd t0, -56(s0)
-    ld t0, -56(s0)
+    sd t0, -64(s0)
+    ld t0, -64(s0)
+    sd t0, -72(s0)
+    ld t0, -72(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call large
     mv t0, a0
-    addi sp, sp, 8
-    sd t0, -64(s0)
-    ld a0, -64(s0)
+    sd t0, -80(s0)
+    ld a0, -80(s0)
     addi sp, s0, 16
     ld ra, 8(s0)
     ld s0, 0(s0)
@@ -404,9 +418,9 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -16(s0)
     ld a0, -16(s0)
     addi sp, s0, 16
@@ -457,12 +471,14 @@
     sd a0, 0(sp)
     addi sp, sp, -8
     sd a1, 0(sp)
+    addi sp, sp, -8
     mv t0, a1
     ld t1, -8(s0)
     mv a0, t0
     mv a1, t1
     call apply1
     mv t0, a0
+    addi sp, sp, 8
     ld a1, 0(sp)
     addi sp, sp, 8
     ld a0, 0(sp)
@@ -627,9 +643,9 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -24(s0)
     li a0, 1
     addi sp, s0, 16
@@ -675,12 +691,14 @@
     sd a0, 0(sp)
     addi sp, sp, -8
     sd a1, 0(sp)
+    addi sp, sp, -8
     mv t0, a1
     ld t1, -8(s0)
     mv a0, t0
     mv a1, t1
     call apply1
     mv t0, a0
+    addi sp, sp, 8
     ld a1, 0(sp)
     addi sp, sp, 8
     ld a0, 0(sp)
@@ -942,10 +960,10 @@
     ld s0, 0(s0)
     ret
   main:
-    addi sp, sp, -80
-    sd ra, 72(sp)
-    sd s0, 64(sp)
-    addi s0, sp, 64
+    addi sp, sp, -88
+    sd ra, 80(sp)
+    sd s0, 72(sp)
+    addi s0, sp, 72
     li a0, 5120
     call rt_init
     addi sp, sp, -8
@@ -976,10 +994,12 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -24(s0)
+    ld t0, -24(s0)
+    sd t0, -32(s0)
     li a0, 1
     addi sp, s0, 16
     ld ra, 8(s0)
@@ -1022,20 +1042,22 @@
     ld s0, 0(s0)
     ret
   test3:
-    addi sp, sp, -80
-    sd ra, 72(sp)
-    sd s0, 64(sp)
-    addi s0, sp, 64
+    addi sp, sp, -104
+    sd ra, 96(sp)
+    sd s0, 88(sp)
+    addi s0, sp, 88
     addi sp, sp, -8
     sd a2, 0(sp)
     addi sp, sp, -8
     sd a1, 0(sp)
     addi sp, sp, -8
     sd a0, 0(sp)
+    addi sp, sp, -8
     mv t0, a0
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
     addi sp, sp, 8
@@ -1046,6 +1068,8 @@
     ld a2, 0(sp)
     addi sp, sp, 8
     sd t0, -8(s0)
+    ld t0, -8(s0)
+    sd t0, -16(s0)
     addi sp, sp, -8
     sd a2, 0(sp)
     addi sp, sp, -8
@@ -1054,26 +1078,32 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
     ld a1, 0(sp)
     addi sp, sp, 8
     ld a2, 0(sp)
     addi sp, sp, 8
-    sd t0, -16(s0)
+    sd t0, -24(s0)
+    ld t0, -24(s0)
+    sd t0, -32(s0)
     addi sp, sp, -8
     sd a2, 0(sp)
+    addi sp, sp, -8
     mv t0, a2
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
     addi sp, sp, 8
     ld a2, 0(sp)
     addi sp, sp, 8
-    sd t0, -24(s0)
+    sd t0, -40(s0)
+    ld t0, -40(s0)
+    sd t0, -48(s0)
     li a0, 1
     addi sp, s0, 16
     ld ra, 8(s0)
@@ -1135,10 +1165,10 @@
     ld s0, 0(s0)
     ret
   main:
-    addi sp, sp, -184
-    sd ra, 176(sp)
-    sd s0, 168(sp)
-    addi s0, sp, 168
+    addi sp, sp, -200
+    sd ra, 192(sp)
+    sd s0, 184(sp)
+    addi s0, sp, 184
     li a0, 5120
     call rt_init
     la a0, test10
@@ -1148,9 +1178,9 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call wrap
     mv t0, a0
-    addi sp, sp, 8
     sd t0, -8(s0)
     ld t0, -8(s0)
     li t1, 3
@@ -1223,13 +1253,15 @@
     mv t0, a0
     sd t0, -88(s0)
     ld t0, -88(s0)
+    sd t0, -96(s0)
+    ld t0, -96(s0)
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
+    addi sp, sp, 8
     call print_int
     mv t0, a0
-    addi sp, sp, 8
-    sd t0, -96(s0)
+    sd t0, -104(s0)
     la a0, test3
     li a1, 3
     call alloc_closure
@@ -1237,31 +1269,33 @@
     addi sp, sp, -8
     sd t0, 0(sp)
     ld a0, 0(sp)
-    call wrap
-    mv t0, a0
     addi sp, sp, 8
-    sd t0, -104(s0)
-    ld t0, -104(s0)
-    li t1, 3
-    mv a0, t0
-    mv a1, t1
-    call apply1
+    call wrap
     mv t0, a0
     sd t0, -112(s0)
     ld t0, -112(s0)
-    li t1, 21
+    li t1, 3
     mv a0, t0
     mv a1, t1
     call apply1
     mv t0, a0
     sd t0, -120(s0)
     ld t0, -120(s0)
-    li t1, 201
+    li t1, 21
     mv a0, t0
     mv a1, t1
     call apply1
     mv t0, a0
     sd t0, -128(s0)
+    ld t0, -128(s0)
+    li t1, 201
+    mv a0, t0
+    mv a1, t1
+    call apply1
+    mv t0, a0
+    sd t0, -136(s0)
+    ld t0, -136(s0)
+    sd t0, -144(s0)
     li a0, 1
     addi sp, s0, 16
     ld ra, 8(s0)
@@ -1277,3 +1311,294 @@
   10
   100
   [1]
+
+  $ ../bin/XML.exe -o tuple_return.s <<EOF
+  > let make_pair x y = (x, y)
+  > 
+  > let main =
+  >   let p = make_pair 10 20 in
+  >   let (a, b) = p in
+  >   print_int (a + b)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_return.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  30
+
+  $ ../bin/XML.exe -o tuple_swap.s <<EOF
+  > let swap p =
+  >   let (a, b) = p in
+  >   (b, a)
+  > 
+  > let main =
+  >   let p1 = (1, 2) in
+  >   let p2 = swap p1 in
+  >   let (x, y) = p2 in
+  >   print_int x
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_swap.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  2
+
+  $ ../bin/XML.exe -o tuple_order.s <<EOF
+  > let f n =
+  >   n
+  > 
+  > let main =
+  >   let t = (f 10, f 20) in
+  >   let (a, b) = t in
+  >   print_int (a + b)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_order.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  30
+
+  $ ../bin/XML.exe -o tuple_linked_list.s <<EOF
+  > let rec sum_list lst =
+  >   if lst = 0 then 0 else
+  >   let (head, tail) = lst in
+  >   head + sum_list tail
+  > 
+  > let main =
+  >   let lst = (10, (20, (30, 0))) in
+  >   print_int (sum_list lst)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_linked_list.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  60
+
+  $ ../bin/XML.exe -o tuple_large.s <<EOF
+  > let main =
+  >   let t = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) in
+  >   let (a, b, c, d, e, f, g, h, i, j) = t in
+  >   print_int j
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_large.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  10
+
+  $ ../bin/XML.exe -o tuple_basic.s <<EOF
+  > let main =
+  >   let t = (10, 20) in
+  >   let (a, b) = t in
+  >   print_int (a + b)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_basic.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  30
+
+  $ ../bin/XML.exe -o tuple_nested.s <<EOF
+  > let main =
+  >   let complex = (100, (20, 3)) in
+  >   let (a, (b, c)) = complex in
+  >   print_int (a + b + c)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_nested.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  123
+
+  $ ../bin/XML.exe -o tuple_arg.s <<EOF
+  > let sum_pair p =
+  >   let (x, y) = p in
+  >   x + y
+  > 
+  > let main =
+  >   let p = (40, 2) in
+  >   print_int (sum_pair p)
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_arg.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  42
+
+  $ ../bin/XML.exe -o tuple_gc_stress.s <<EOF
+  > let rec make_list n acc =
+  >   if n = 0 then acc else
+  >   make_list (n - 1) (n, acc)
+  > 
+  > let main =
+  >   let _ = print_gc_status in
+  >   let result = make_list 10000 0 in
+  >   let (head, tail) = result in
+  >   let _ = print_gc_status in
+  >   print_int head
+  $ cat tuple_gc_stress.s
+  .section .text
+  .global main
+  .type main, @function
+  make_list:
+    addi sp, sp, -96
+    sd ra, 88(sp)
+    sd s0, 80(sp)
+    addi s0, sp, 80
+    mv t0, a0
+    li t1, 1
+    xor t2, t0, t1
+    seqz t0, t2
+    sd t0, -8(s0)
+    ld t0, -8(s0)
+    beq t0, zero, else_0
+    mv t0, a1
+    j endif_1
+  else_0:
+    mv t0, a0
+    li t1, 3
+    sub t0, t0, t1
+    addi t0, t0, 1
+    sd t0, -16(s0)
+    addi sp, sp, -8
+    sd a0, 0(sp)
+    addi sp, sp, -8
+    sd a1, 0(sp)
+    addi sp, sp, -8
+    ld t1, -16(s0)
+    sd t1, 0(sp)
+    la a0, make_list
+    li a1, 2
+    call alloc_closure
+    mv t0, a0
+    ld t1, 0(sp)
+    mv a0, t0
+    mv a1, t1
+    call apply1
+    mv t0, a0
+    addi sp, sp, 8
+    ld a1, 0(sp)
+    addi sp, sp, 8
+    ld a0, 0(sp)
+    addi sp, sp, 8
+    sd t0, -24(s0)
+    addi sp, sp, -8
+    addi sp, sp, -8
+    sd a0, 0(sp)
+    addi sp, sp, -8
+    sd a1, 0(sp)
+    addi sp, sp, -8
+    li a0, 2
+    call create_tuple
+    addi sp, sp, 8
+    sd a0, 16(sp)
+    ld a1, 0(sp)
+    addi sp, sp, 8
+    ld a0, 0(sp)
+    addi sp, sp, 8
+    mv t1, a0
+    ld t2, 0(sp)
+    addi t2, t2, 16
+    sd t1, 0(t2)
+    mv t1, a1
+    ld t2, 0(sp)
+    addi t2, t2, 16
+    sd t1, 8(t2)
+    ld t0, 0(sp)
+    addi sp, sp, 8
+    sd t0, -32(s0)
+    addi sp, sp, -8
+    sd a0, 0(sp)
+    addi sp, sp, -8
+    sd a1, 0(sp)
+    ld t0, -24(s0)
+    ld t1, -32(s0)
+    mv a0, t0
+    mv a1, t1
+    call apply1
+    mv t0, a0
+    ld a1, 0(sp)
+    addi sp, sp, 8
+    ld a0, 0(sp)
+    addi sp, sp, 8
+    sd t0, -40(s0)
+    ld t0, -40(s0)
+  endif_1:
+    sd t0, -48(s0)
+    ld a0, -48(s0)
+    addi sp, s0, 16
+    ld ra, 8(s0)
+    ld s0, 0(s0)
+    ret
+  main:
+    addi sp, sp, -144
+    sd ra, 136(sp)
+    sd s0, 128(sp)
+    addi s0, sp, 128
+    li a0, 5120
+    call rt_init
+    call print_gc_status
+    mv t0, a0
+    sd t0, -8(s0)
+    addi sp, sp, -8
+    li t1, 20001
+    sd t1, 0(sp)
+    la a0, make_list
+    li a1, 2
+    call alloc_closure
+    mv t0, a0
+    ld t1, 0(sp)
+    mv a0, t0
+    mv a1, t1
+    call apply1
+    mv t0, a0
+    addi sp, sp, 8
+    sd t0, -16(s0)
+    ld t0, -16(s0)
+    li t1, 1
+    mv a0, t0
+    mv a1, t1
+    call apply1
+    mv t0, a0
+    sd t0, -24(s0)
+    ld t0, -24(s0)
+    sd t0, -32(s0)
+    ld t0, -32(s0)
+    sd t0, -40(s0)
+    ld a0, -40(s0)
+    li a1, 0
+    call field
+    mv t0, a0
+    sd t0, -48(s0)
+    ld t0, -48(s0)
+    sd t0, -56(s0)
+    ld a0, -40(s0)
+    li a1, 1
+    call field
+    mv t0, a0
+    sd t0, -64(s0)
+    ld t0, -64(s0)
+    sd t0, -72(s0)
+    call print_gc_status
+    mv t0, a0
+    sd t0, -80(s0)
+    ld t0, -56(s0)
+    addi sp, sp, -8
+    sd t0, 0(sp)
+    ld a0, 0(sp)
+    addi sp, sp, 8
+    call print_int
+    mv t0, a0
+    sd t0, -88(s0)
+    ld a0, -88(s0)
+    addi sp, s0, 16
+    ld ra, 8(s0)
+    ld s0, 0(s0)
+    ret
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_gc_stress.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 524288
+  Heap         size: 524288
+  Current      bank: 0
+  Total   allocated: 0
+  GC    collections: 0
+  GC    allocations: 0
+  =================
+  === GC Status ===
+  Current allocated: 231552
+  Free        space: 292736
+  Heap         size: 524288
+  Current      bank: 0
+  Total   allocated: 1280096
+  GC    collections: 2
+  GC    allocations: 30002
+  =================
+  1
+

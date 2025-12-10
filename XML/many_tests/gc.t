@@ -108,3 +108,38 @@
   $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe || true
   GC: out of memory
   Aborted (core dumped)
+
+
+  $ ../bin/XML.exe -o tuple_gc_stress.s <<EOF
+  > let rec make_list n acc =
+  >   if n = 0 then acc else
+  >   make_list (n - 1) (n, acc)
+  > 
+  > let main =
+  >   let _ = print_gc_status in
+  >   let result = make_list 10000 0 in
+  >   let (head, tail) = result in
+  >   let _ = print_gc_status in
+  >   print_int head
+  $ riscv64-linux-gnu-as -march=rv64gc tuple_gc_stress.s -o temp.o
+  $ riscv64-linux-gnu-gcc temp.o runtime.o -o prog.exe
+  $ qemu-riscv64 -L /usr/riscv64-linux-gnu -cpu rv64 ./prog.exe
+  === GC Status ===
+  Current allocated: 0
+  Free        space: 524288
+  Heap         size: 524288
+  Current      bank: 0
+  Total   allocated: 0
+  GC    collections: 0
+  GC    allocations: 0
+  =================
+  === GC Status ===
+  Current allocated: 231552
+  Free        space: 292736
+  Heap         size: 524288
+  Current      bank: 0
+  Total   allocated: 1280096
+  GC    collections: 2
+  GC    allocations: 30002
+  =================
+  1

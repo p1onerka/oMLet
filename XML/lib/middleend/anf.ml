@@ -73,11 +73,8 @@ let normalise_const = function
   | Const_string e -> Imm_ident e
 ;;
 
-let flatten_arg_expr e =
-  match e with
-  | Exp_tuple (e1, e2, rest) -> e1 :: e2 :: rest
-  | _ -> [ e ]
-;;
+(* FIX: Do not flatten tuples in arguments. Treat tuple as a single value. *)
+let flatten_arg_expr e = [ e ]
 
 let pat_vars = function
   | Pattern.Pat_var p -> ok [ p ]
@@ -109,6 +106,36 @@ let initial_state = { next = 0 }
 let fresh (st : nstate) : ident * nstate =
   let name = "t_" ^ string_of_int st.next in
   name, { next = st.next + 1 }
+;;
+
+(* Helper to generate bindings for patterns (tuples, etc) *)
+let rec bind_pat (pat : Pattern.t) (source_imm : im_expr) (body : anf_expr) (st : nstate)
+  : (anf_expr * nstate) r
+  =
+  match pat with
+  | Pattern.Pat_var x -> ok (Anf_let (Nonrecursive, x, Comp_imm source_imm, body), st)
+  | Pattern.Pat_any | Pattern.Pat_construct ("()", None) -> ok (body, st)
+  | Pattern.Pat_tuple (p1, p2, ps) ->
+    let pats = p1 :: p2 :: ps in
+    let word_size = 8 in
+    let rec loop i current_body st_iter remaining_pats =
+      let helper = function
+        | [] -> ok (current_body, st_iter)
+        | p :: rest ->
+          let* body_rest, st_next = loop (i + 1) current_body st_iter rest in
+          let tmp_field, st_tmp = fresh st_next in
+          (* Recursively bind the sub-pattern to the temp field *)
+          let* body_bind, st_bind = bind_pat p (Imm_ident tmp_field) body_rest st_tmp in
+          (* let tmp = source[offset] *)
+          let offset = i * word_size in
+          ok
+            ( Anf_let (Nonrecursive, tmp_field, Comp_load (source_imm, offset), body_bind)
+            , st_bind )
+      in
+      helper remaining_pats
+    in
+    loop 0 body st pats
+  | _ -> err (`Unsupported_let_pattern (Pattern.show pat))
 ;;
 
 let rec norm_comp expr (k : comp_expr -> nstate -> (anf_expr * nstate) r) (st : nstate)
@@ -170,41 +197,14 @@ let rec norm_comp expr (k : comp_expr -> nstate -> (anf_expr * nstate) r) (st : 
       | _ -> err `Let_and_not_supported
     in
     let { pat; expr = vb_expr } = first_binding in
-    (match pat with
-     | Pattern.Pat_var x ->
-       norm_comp
-         vb_expr
-         (function
-           | (Comp_func _ | Comp_alloc _) as ce ->
-             fun st ->
-               let tmp, st1 = fresh st in
-               let* body_anf, st2 = norm_comp body k st1 in
-               ok
-                 ( Anf_let
-                     ( Nonrecursive
-                     , tmp
-                     , ce
-                     , Anf_let (rec_flag, x, Comp_imm (Imm_ident tmp), body_anf) )
-                 , st2 )
-           | ( Comp_imm _
-             | Comp_binop _
-             | Comp_app _
-             | Comp_branch _
-             | Comp_load _
-             | Comp_tuple _ ) as ce ->
-             fun st ->
-               let* body_anf, st' = norm_comp body k st in
-               ok (Anf_let (rec_flag, x, ce, body_anf), st'))
-         st
-     | Pattern.Pat_any | Pattern.Pat_construct ("()", None) ->
-       norm_comp
-         vb_expr
-         (fun ce st ->
-            let tmp, st1 = fresh st in
-            let* body_anf, st2 = norm_comp body k st1 in
-            ok (Anf_let (Nonrecursive, tmp, ce, body_anf), st2))
-         st
-     | _ -> err (`Unsupported_let_pattern (Pattern.show pat)))
+    norm_comp
+      vb_expr
+      (fun ce st ->
+         let scrutinee, st1 = fresh st in
+         let* body_anf, st2 = norm_comp body k st1 in
+         let* match_anf, st3 = bind_pat pat (Imm_ident scrutinee) body_anf st2 in
+         ok (Anf_let (rec_flag, scrutinee, ce, match_anf), st3))
+      st
   | _ -> err `Unsupported_expr_in_normaliser
 
 and norm_to_imm expr (k : im_expr -> nstate -> (anf_expr * nstate) r) (st : nstate)

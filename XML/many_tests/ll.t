@@ -34,39 +34,47 @@
   let wrap = fun f -> let t_0 = (1 = 1)
                         in let t_1 = if t_0 then f else f in t_1;;
   let test3 = fun a b
-                c -> let a = print_int a
-                       in let b = print_int b in let c = print_int c in 0;;
+                c -> let t_3 = print_int a
+                       in let a = t_3
+                            in let t_4 = print_int b
+                                 in let b = t_4
+                                      in let t_5 = print_int c
+                                           in let c = t_5 in 0;;
   let test10 = fun a b c d e f g h i
-                 j -> let t_4 = (a + b)
-                        in let t_5 = (t_4 + c)
-                             in let t_6 = (t_5 + d)
-                                  in let t_7 = (t_6 + e)
-                                       in let t_8 = (t_7 + f)
-                                            in let t_9 = (t_8 + g)
-                                                 in let t_10 = (t_9 + h)
-                                                      in let t_11 = (t_10 + i)
-                                                           in let t_12 = (t_11 + j)
-                                                                in t_12;;
-  let main = let t_14 = wrap test10
-               in let t_15 = t_14 1
-                    in let t_16 = t_15 10
-                         in let t_17 = t_16 100
-                              in let t_18 = t_17 1000
-                                   in let t_19 = t_18 10000
-                                        in let t_20 = t_19 100000
-                                             in let t_21 = t_20 1000000
-                                                  in let t_22 = t_21 10000000
-                                                       in let t_23 = t_22 100000000
-                                                            in let rez = t_23 1000000000
-                                                                 in let t_24 = print_int rez
+                 j -> let t_7 = (a + b)
+                        in let t_8 = (t_7 + c)
+                             in let t_9 = (t_8 + d)
+                                  in let t_10 = (t_9 + e)
+                                       in let t_11 = (t_10 + f)
+                                            in let t_12 = (t_11 + g)
+                                                 in let t_13 = (t_12 + h)
+                                                      in let t_14 = (t_13 + i)
+                                                           in let t_15 = (t_14 + j)
+                                                                in t_15;;
+  let main = let t_17 = wrap test10
+               in let t_18 = t_17 1
+                    in let t_19 = t_18 10
+                         in let t_20 = t_19 100
+                              in let t_21 = t_20 1000
+                                   in let t_22 = t_21 10000
+                                        in let t_23 = t_22 100000
+                                             in let t_24 = t_23 1000000
+                                                  in let t_25 = t_24 10000000
+                                                       in let t_26 = t_25 100000000
+                                                            in let t_27 = t_26 1000000000
+                                                                 in let rez = t_27
                                                                       in 
-                                                                      let t_25 = wrap test3
+                                                                      let t_28 = print_int rez
                                                                       in 
-                                                                      let t_26 = t_25 1
+                                                                      let t_29 = wrap test3
                                                                       in 
-                                                                      let t_27 = t_26 10
+                                                                      let t_30 = t_29 1
                                                                       in 
-                                                                      let temp2 = t_27 100
+                                                                      let t_31 = t_30 10
+                                                                      in 
+                                                                      let t_32 = t_31 100
+                                                                      in 
+                                                                      let temp2 = t_32
                                                                       in 0;;
 
 
@@ -108,5 +116,6 @@
                                                                     in t_17
                               in t_18;;
   let main = let t_20 = fib 6
-               in let t_21 = t_20 id in let z = print_int t_21 in 0;;
+               in let t_21 = t_20 id
+                    in let t_22 = print_int t_21 in let z = t_22 in 0;;
 

@@ -44,14 +44,16 @@
                                                   let t_2 = print_int 1 in t_2
                                         in t_3 in t_4;;
   let main = let t_5 = (0 = 1)
-               in let t_8 = if t_5 then let t_6 = (0 = 1) in t_6 else let t42 = print_int 42
+               in let t_9 = if t_5 then let t_6 = (0 = 1) in t_6 else let t_7 = print_int 42
                                                                       in 
-                                                                      let t_7 = (1 = 1)
-                                                                      in t_7
-                    in let t_11 = if t_8 then let t_9 = (0 = 1) in t_9 else 
-                                    let t_10 = (1 = 1) in t_10
-                         in let x = if t_11 then 0 else 1
-                              in let t_12 = large x in t_12;;
+                                                                      let t42 = t_7
+                                                                      in 
+                                                                      let t_8 = (1 = 1)
+                                                                      in t_8
+                    in let t_12 = if t_9 then let t_10 = (0 = 1) in t_10 else 
+                                    let t_11 = (1 = 1) in t_11
+                         in let t_13 = if t_12 then 0 else 1
+                              in let x = t_13 in let t_14 = large x in t_14;;
 
   $ cat manytests/typed/010fibcps_ll.ml
   let id x = x
@@ -97,4 +99,60 @@
                                                                       in t_17
                                          in t_18 in t_19;;
   let main = let t_20 = fib 6
-               in let t_21 = t_20 id in let z = print_int t_21 in 0;;
+               in let t_21 = t_20 id
+                    in let t_22 = print_int t_21 in let z = t_22 in 0;;
+
+  $ dune exec ./../bin/XML.exe -- --anf <<EOF
+  > let main =
+  >   let t = (10, 20) in
+  >   let (a, b) = t in
+  >   print_int (a + b)
+  let main = let t_0 = alloc(10,  20)
+               in let t = t_0
+                    in let t_1 = t
+                         in let t_5 = t_1[0]
+                              in let a = t_5
+                                   in let t_4 = t_1[8]
+                                        in let b = t_4
+                                             in let t_2 = (a + b)
+                                                  in let t_3 = print_int t_2
+                                                       in t_3;;
+
+  $ dune exec ./../bin/XML.exe -- --anf <<EOF
+  > let main =
+  >   let t = (1, (2, 3)) in
+  >   let (a, (b, c)) = t in
+  >   print_int (a + b + c)
+  let main = let t_0 = alloc(2,  3)
+               in let t_1 = alloc(1,  t_0)
+                    in let t = t_1
+                         in let t_2 = t
+                              in let t_9 = t_2[0]
+                                   in let a = t_9
+                                        in let t_6 = t_2[8]
+                                             in let t_8 = t_6[0]
+                                                  in let b = t_8
+                                                       in let t_7 = t_6[8]
+                                                            in let c = t_7
+                                                                 in let t_3 = (a + b)
+                                                                      in 
+                                                                      let t_4 = (t_3 + c)
+                                                                      in 
+                                                                      let t_5 = print_int t_4
+                                                                      in t_5;;
+
+  $ dune exec ./../bin/XML.exe -- --anf <<EOF
+  > let swap p =
+  >   let (x, y) = p in
+  >   (y, x)
+  > let main = 
+  >   let p = (1, 2) in
+  >   swap p
+  let swap = let t_4 = fun p -> let t_0 = p
+                                  in let t_3 = t_0[0]
+                                       in let x = t_3
+                                            in let t_2 = t_0[8]
+                                                 in let y = t_2
+                                                      in let t_1 = alloc(y,  x)
+                                                           in t_1 in t_4;;
+  let main = let t_5 = alloc(1,  2) in let p = t_5 in let t_6 = swap p in t_6;;

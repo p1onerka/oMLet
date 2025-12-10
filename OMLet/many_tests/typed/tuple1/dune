@@ -1,0 +1,10 @@
+(cram
+ (applies_to tuple1_test)
+ (deps
+  ../../../bin/omlet.exe
+  tuple1.ml
+  ../../../lib/runtime.c
+  ../../../lib/gc.c
+  ../../../lib/gc.h
+  ../../../lib/callf.s
+  ../build_and_run.sh))

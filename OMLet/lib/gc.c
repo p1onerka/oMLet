@@ -16,8 +16,9 @@
 
 typedef uint8_t tag_t;
 enum {
-  T_UNBOXED = 0,
-  T_CLOSURE = 1,
+  T_UNBOXED = 1,
+  T_CLOSURE = 247,
+  T_TUPLE = 0,
 };
 
 typedef uint8_t color_t;
@@ -51,7 +52,7 @@ void print_gc_status() {
   printf("Total amount of allocated memory (in bytes): %ld\n",
          total_amount_of_allocated_memory);
   printf("Total number of GC sessions: %ld\n", number_of_gc_sessions);
-  printf("Borders of current heap: from %p to %p\n", cur_heap_ptr->start,
+  printf("Borders of current heap: from %s to %s\n", cur_heap_ptr->start,
          cur_heap_ptr->start + cur_heap_ptr->size);
   printf("Free space (in bytes) on current heap: %ld\n",
          cur_heap_ptr->size - cur_heap_ptr->offset);
@@ -137,7 +138,7 @@ static uint64_t *copy_object(uint64_t *obj, omletHeap_t *from_heap,
   uint64_t *new_obj = (uint64_t *)(new_hdr + 1);
 
   // copy payload
-  if (old_hdr->tag == T_CLOSURE) {
+  if (old_hdr->tag == T_CLOSURE || old_hdr->tag == T_TUPLE) {
     for (uint16_t i = 0; i < old_hdr->size; i++) {
       new_obj[i] = obj[i];
     }
@@ -152,7 +153,7 @@ static void update_pointers(uint64_t *obj, omletHeap_t *from_heap,
                             omletHeap_t *to_heap) {
   box_header_t *hdr = get_header(obj);
 
-  if (hdr->tag != T_CLOSURE) {
+  if (hdr->tag != T_CLOSURE && hdr->tag != T_TUPLE) {
     return;
   }
 

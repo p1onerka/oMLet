@@ -39,10 +39,17 @@ and pp_cexpr fmt = function
       fn
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " ") pp_imm)
       args
+  | CField (imm, num) -> fprintf fmt "%a.%d" pp_imm imm num
 
 and pp_imm fmt = function
   | ImmNum n -> fprintf fmt "%d" n
   | ImmId (Ident x) -> fprintf fmt "%s" x
+  | ITuple (fst, snd, rest) ->
+    fprintf
+      fmt
+      "@[<2>(%a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_imm)
+      (fst :: snd :: rest)
 
 and pp_binding fmt (id, aexpr) =
   let open Ast in

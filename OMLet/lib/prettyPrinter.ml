@@ -1,4 +1,4 @@
-(** Copyright 2024-2025, Ksenia Kotelnikova <xeniia.ka@gmail.com>, Gleb Nasretdinov <gleb.nasretdinov@proton.me> *)
+(** Copyright 2025, Ksenia Kotelnikova <xeniia.ka@gmail.com>, Sofya Kozyreva <k81sofia@gmail.com>, Vyacheslav Kochergin <vyacheslav.kochergin1@gmail.com> *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
@@ -50,8 +50,8 @@ let rec pp_pattern fmt = function
       fmt
       (p1 :: p2 :: rest);
     fprintf fmt ")"
-  | PConst literal -> fprintf fmt "%a " pp_expr (Const literal)
-  | PVar (Ident name) -> fprintf fmt "%s " name
+  | PConst literal -> fprintf fmt "%a" pp_expr (Const literal)
+  | PVar (Ident name) -> fprintf fmt "%s" name
   | POption p ->
     (match p with
      | None -> fprintf fmt "None "

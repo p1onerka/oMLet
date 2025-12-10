@@ -8,6 +8,7 @@ open Format
 type immexpr =
   | ImmNum of int (* 42 *)
   | ImmId of ident (* a *)
+  | ITuple of immexpr * immexpr * immexpr list
 [@@deriving show { with_path = false }]
 
 type cbinop =
@@ -29,6 +30,7 @@ type cexpr =
   | CImmexpr of immexpr
   | CLam of ident * aexpr (* fun a -> a + 42 *)
   | CApp of immexpr * immexpr list (* func_name arg1 arg2 ... argn *)
+  | CField of immexpr * int
 [@@deriving show { with_path = false }]
 
 and aexpr =
@@ -101,20 +103,24 @@ type state =
 
 let empty_state = { lifted_lams = []; lifted_letins = []; functions = FuncSet.empty }
 
-(* let pp_state fmt (state : state) =
-  let pp_list fmt lst =
-    Format.fprintf fmt "[";
-    List.iter (fun (Ident id, _) -> Format.fprintf fmt "%s; " id) lst;
-    Format.fprintf fmt "]"
-  in
-  Format.fprintf
-    fmt
-    "{ lifted_lams = %a; lifted_letins = %a }"
-    pp_list
-    state.lifted_lams
-    pp_list
-    state.lifted_letins
-;; *)
+let rec anf_field parent_tuple field body state num =
+  match field with
+  | PTuple (fst, snd, rest) ->
+    let rest = fst :: snd :: rest in
+    let* tuple_fresh = gen_temp "res_of_tuple_FIELD" in
+    let* body, state = anf_tuple tuple_fresh rest body state 0 in
+    return (ALet (tuple_fresh, CField (ImmId parent_tuple, num), body), state)
+  | PVar id -> return (ALet (id, CField (ImmId parent_tuple, num), body), state)
+  | Wild -> return (body, state)
+  | _ -> fail (Not_Yet_Implemented "pattern expr")
+
+and anf_tuple parent_tuple tuple_rest body state num =
+  match tuple_rest with
+  | [] -> return (body, state)
+  | pat :: rest ->
+    let* body, state = anf_field parent_tuple pat body state num in
+    anf_tuple parent_tuple rest body state (num + 1)
+;;
 
 let rec anf (state : state) e expr_with_hole =
   let anf_binop opname op left right expr_with_hole =
@@ -143,6 +149,13 @@ let rec anf (state : state) e expr_with_hole =
     anf state expr (fun _ -> anf state body expr_with_hole)
   | LetIn (_, Let_bind (Wild, [], expr), [], body) ->
     anf state expr (fun _ -> anf state body expr_with_hole)
+  | LetIn (_, Let_bind (PTuple (fst, snd, rest), [], expr), [], body) ->
+    let* tuple_varname = gen_temp "res_of_tuple_OUTER" in
+    let rest = fst :: snd :: rest in
+    let* body_anf, state = anf state body expr_with_hole in
+    let* body, state = anf_tuple tuple_varname rest body_anf state 0 in
+    anf state expr (fun immval ->
+      return (ALet (tuple_varname, CImmexpr immval, body), state))
   | LetIn (_, Let_bind (PVar id, args, expr), [], body) ->
     let* arg_names =
       List.fold_right
@@ -241,8 +254,21 @@ let rec anf (state : state) e expr_with_hole =
         ; functions = FuncSet.add lifted_name state2.functions
         }
     in
-    (* Format.printf "state3 %a@. \n" pp_state state3; *)
     return (ALet (varname, CImmexpr (ImmId lifted_name), e), state3)
+  | Tuple (fst, snd, rest) ->
+    anf state fst (fun fst_imm ->
+      anf state snd (fun snd_imm ->
+        let rec anf_list acc st = function
+          | [] ->
+            let* varname = gen_temp "res_of_tuple" in
+            let* e, state1 = expr_with_hole (ImmId varname) in
+            return
+              ( ALet (varname, CImmexpr (ITuple (fst_imm, snd_imm, List.rev acc)), e)
+              , state1 )
+          | expr :: e_rest ->
+            anf st expr (fun immval -> anf_list (immval :: acc) st e_rest)
+        in
+        anf_list [] state rest))
   | _ ->
     (* Stdlib.Format.printf "%a@." pp_expr e; *)
     fail (Not_Yet_Implemented "ANF expr")
@@ -362,6 +388,11 @@ let rec free_vars_imm lams = function
      | Some cexpr -> free_vars_cexpr lams cexpr
      | None -> IdentSet.singleton id)
   | ImmNum _ -> IdentSet.empty
+  | ITuple (fst, snd, rest) ->
+    List.fold_left
+      (fun acc imm -> IdentSet.union acc (free_vars_imm lams imm))
+      IdentSet.empty
+      (fst :: snd :: rest)
 
 and free_vars_aexpr lams (expr : aexpr) : IdentSet.t =
   match expr with
@@ -408,6 +439,7 @@ and free_vars_cexpr lams = function
       | None -> IdentSet.empty
     in
     IdentSet.union fv_cond (IdentSet.union fv_t fv_f)
+  | CField (imm, _) -> free_vars_imm lams imm
 ;;
 
 module IdentMap = Map.Make (struct
